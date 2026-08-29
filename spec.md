@@ -77,3 +77,36 @@ HTML report and future `--serve`/hosted dashboard consume this exact object.
 - `--json` validates against the schema; `--html` opens offline with no console errors.
 - `--watch` detects a newly started listener within one interval.
 - `python3 -m unittest` passes using fixture outputs (no live system needed).
+
+---
+
+# v2 — `--fix` (2026-08-29)
+
+## What
+
+`sudo python3 llm_host_guard.py --fix [--yes]` runs the audit, then for each finding that carries a fix recipe: prints the exact commands, asks y/N (skipped with `--yes`), runs them, prints the undo command. Nothing runs without root; nothing runs that wasn't printed.
+
+## Recipes (finding → commands)
+
+| Finding | Fix | Undo |
+|---|---|---|
+| LLM port open to LAN, ufw present | `ufw allow from <lan>/24 to any port N proto tcp comment llm-host-guard` (scopes; does not touch bind) | `ufw delete allow from <lan>/24 to any port N proto tcp` |
+| ufw allows LLM port from Anywhere | delete the Anywhere rule, add the scoped rule above | reverse |
+| `OLLAMA_HOST=0.0.0.0`, systemd-managed, not ufw-scoped | drop-in `/etc/systemd/system/ollama.service.d/llm-host-guard.conf` → `Environment=OLLAMA_HOST=127.0.0.1`, daemon-reload, restart | remove drop-in, daemon-reload, restart |
+| container publishes 0.0.0.0:N | `iptables -I DOCKER-USER -i <default-iface> -p tcp --dport N -j DROP` (live; persistence hint printed — distro-specific) | `iptables -D …` |
+| sshd PasswordAuthentication yes | drop-in `/etc/ssh/sshd_config.d/00-llm-host-guard.conf` → `PasswordAuthentication no` (00- sorts before cloud-init's 50-, first match wins), `sshd -t`, reload | remove drop-in, reload |
+
+## Safety rules
+
+- Refuse entirely if not root (exit 3).
+- sshd recipe refuses unless the invoking user already has a non-empty SSH authorized-keys file; prints "keep this session open, test key login from a second terminal" before applying.
+- Ollama loopback recipe is offered only when no ufw-scoped rule exists; if LAN clients are intended, the scoped-ufw recipe is the right one.
+- Commands run one at a time; first failure stops that recipe and prints the undo for what already ran.
+- `--fix` never edits an existing file — only creates drop-ins / adds rules — so undo is always a file removal or rule delete.
+
+## Acceptance
+
+- `--fix` without root → exit 3, message, nothing executed.
+- `--fix --yes` with a mocked runner executes exactly the printed commands, in order, and prints undo lines.
+- sshd recipe skipped with reason when the authorized-keys file is missing.
+- Re-running the audit after `--fix` shows the finding downgraded (MED/LOW/OK), not repeated.

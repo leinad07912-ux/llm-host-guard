@@ -34,6 +34,7 @@ def run(ctx: Ctx) -> list[Finding]:
                                "Reachable only via loopback thanks to your DOCKER-USER rule.", "", {"container": name, "port": port}))
             continue
         sev = "CRITICAL" if port in llm_ports else "HIGH"
+        rule = f"DOCKER-USER -i {ctx.default_iface()} -p tcp --dport {port} -j DROP"
         out.append(Finding(
             NAME, sev,
             f"container {name} publishes 0.0.0.0:{port} — bypasses host firewall",
@@ -42,6 +43,8 @@ def run(ctx: Ctx) -> list[Finding]:
             f"Publish on loopback: `-p 127.0.0.1:{port}:<container_port>`; or set "
             "`{\"ip\": \"127.0.0.1\"}` in /etc/docker/daemon.json; or add DOCKER-USER rules.",
             {"container": name, "port": port},
+            fix_cmds=[f"iptables -I {rule}"], undo_cmds=[f"iptables -D {rule}"],
+            fix_note="live rule only; persist via /etc/ufw/after.rules (see examples/ufw-docker-user.rules) or iptables-persistent",
         ))
     user_chain = sh(["iptables", "-L", "DOCKER-USER", "-n"])
     if wild and user_chain is None:

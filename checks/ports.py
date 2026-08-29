@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import http.client
 import json
+import shutil
 
 from core import Ctx, Finding, Listener
 
@@ -54,6 +55,8 @@ def run(ctx: Ctx) -> list[Finding]:
                 {"port": l.port, "addr": l.addr, "proc": l.proc, "ufw_sources": srcs},
             ))
         elif hits:
+            cidr = ctx.lan_cidr
+            has_ufw = shutil.which("ufw") is not None
             out.append(Finding(
                 NAME, "CRITICAL",
                 f"{sig['name']} on {l.addr}:{l.port} reachable from LAN with no auth"
@@ -66,6 +69,9 @@ def run(ctx: Ctx) -> list[Finding]:
                 f"{sig['bind_fix']}  — or restrict: `ufw allow from <LAN>/24 to any port {l.port}` "
                 f"and put an authenticating reverse proxy in front.",
                 {"port": l.port, "addr": l.addr, "proc": l.proc, "probe": hits},
+                fix_cmds=[f"ufw allow from {cidr} to any port {l.port} proto tcp comment llm-host-guard"] if has_ufw else [],
+                undo_cmds=[f"ufw delete allow from {cidr} to any port {l.port} proto tcp"] if has_ufw else [],
+                fix_note=f"scopes to {cidr} (tighten to a /32 client later); binding stays" if has_ufw else "no ufw on this host — no automatic recipe",
             ))
         elif l.proc and srcs:
             out.append(Finding(NAME, "LOW", f"{sig['name']} on {l.addr}:{l.port} non-loopback, ufw-scoped to {', '.join(srcs)}",

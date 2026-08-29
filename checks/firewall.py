@@ -30,9 +30,14 @@ def _ufw(ctx: Ctx) -> list[Finding]:
     for line in status.splitlines():
         m = re.match(r"^(\d+)(?:/tcp)?\s+ALLOW IN\s+(\S+)", line)
         if m and int(m.group(1)) in llm_ports and m.group(2) == "Anywhere":
-            out.append(Finding(NAME, "HIGH", f"ufw allows port {m.group(1)} (LLM) from Anywhere",
+            port, cidr = m.group(1), ctx.lan_cidr
+            out.append(Finding(NAME, "HIGH", f"ufw allows port {port} (LLM) from Anywhere",
                                "Rule is not scoped to your LAN.",
-                               f"sudo ufw delete allow {m.group(1)} && sudo ufw allow from <LAN>/24 to any port {m.group(1)}"))
+                               f"sudo ufw delete allow {port}/tcp && sudo ufw allow from {cidr} to any port {port} proto tcp",
+                               fix_cmds=[f"ufw delete allow {port}/tcp",
+                                         f"ufw allow from {cidr} to any port {port} proto tcp comment llm-host-guard"],
+                               undo_cmds=[f"ufw delete allow from {cidr} to any port {port} proto tcp",
+                                          f"ufw allow {port}/tcp"]))
     return out or [Finding(NAME, "OK", "ufw active, default deny incoming, LLM ports scoped")]
 
 

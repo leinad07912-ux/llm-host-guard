@@ -152,12 +152,16 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--checks", default=",".join(checks.ALL), help=f"comma list of: {','.join(checks.ALL)}")
     ap.add_argument("--model-dir", action="append", default=[], help="extra model directory to scan")
     ap.add_argument("--no-color", action="store_true")
+    ap.add_argument("--fix", action="store_true", help="apply fix recipes (root); prints each command, asks y/N")
+    ap.add_argument("--yes", action="store_true", help="with --fix: don't ask")
+    ap.add_argument("--dry-run", action="store_true", help="with --fix: print recipes, run nothing, no root needed")
     a = ap.parse_args(argv)
     names = [n.strip() for n in a.checks.split(",") if n.strip() in checks.ALL]
 
     while True:
         ctx = Ctx(model_dirs=a.model_dir)
-        rep = report(ctx, run_checks(ctx, names))
+        findings = run_checks(ctx, names)
+        rep = report(ctx, findings)
         if a.watch:
             new = diff_state(rep)
             if new:
@@ -184,6 +188,13 @@ def main(argv: list[str] | None = None) -> int:
             write_html(rep, Path(a.html))
             if not a.json:
                 print(f"html report: {a.html}")
+        if a.fix:
+            import fix
+            n = fix.apply(ctx, findings, yes=a.yes, dry_run=a.dry_run)
+            if n < 0:
+                return 3
+            print(f"\n{n} recipe(s) {'previewed' if a.dry_run else 'applied. Re-run the audit to confirm'}.")
+            return 0
         sev = {f["severity"] for f in rep["findings"]}
         return 2 if "CRITICAL" in sev else 1 if sev & {"HIGH", "MED"} else 0
 

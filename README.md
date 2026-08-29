@@ -69,9 +69,21 @@ Run `--watch 30` under systemd / launchd for continuous monitoring; `--html` in 
 
 Telegram: create a bot with @BotFather, DM it once, get your chat id from `https://api.telegram.org/bot<TOKEN>/getUpdates`, then export `LLM_HOST_GUARD_TELEGRAM_BOT_TOKEN` and `LLM_HOST_GUARD_TELEGRAM_CHAT_ID` (a systemd `EnvironmentFile=` keeps them off the command line). `examples/llm-host-guard-watch.service` is a ready user unit.
 
+## `--fix` (v2)
+
+```
+python3 llm_host_guard.py --fix --dry-run     # preview every recipe, no root, runs nothing
+sudo python3 llm_host_guard.py --fix          # prints each command, asks y/N per finding
+sudo python3 llm_host_guard.py --fix --yes    # unattended
+```
+
+Recipes exist for: open LLM port → scoped ufw rule; ufw "Anywhere" rule on an LLM port → re-scoped; `OLLAMA_HOST=0.0.0.0` under systemd → loopback drop-in; container on 0.0.0.0 → DOCKER-USER drop; sshd password auth → `sshd_config.d/00-…` drop-in (only if you already have an SSH key installed — it will not lock you out).
+
+Every recipe only *adds* a rule or a drop-in file, never edits an existing file, and prints its undo command. Findings without a safe automatic recipe say why.
+
 ## What it does not do
 
-- Change anything (`--fix` is planned for v2, opt-in)
+- Edit config files in place (`--fix` only adds drop-ins/rules)
 - Replace a firewall or IDS — it tells you when you're missing one
 - Detect prompt injection or scan MCP servers — see agent-firewall / mcp-sentinel
 

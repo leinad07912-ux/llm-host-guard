@@ -33,6 +33,9 @@ class Finding:
     detail: str = ""
     fix: str = ""
     evidence: dict = field(default_factory=dict)
+    fix_cmds: list = field(default_factory=list)   # --fix recipe, run in order as root
+    undo_cmds: list = field(default_factory=list)
+    fix_note: str = ""                              # why a recipe is absent / caveat shown before applying
 
     def key(self) -> str:
         return f"{self.check}:{self.severity}:{self.title}"
@@ -186,6 +189,18 @@ class Ctx:
 
     _ufw: str | None = None
     _docker_user: str | None = None
+    _iface: str | None = None
+
+    @property
+    def lan_cidr(self) -> str:
+        return ".".join(self.lan_ip.split(".")[:3]) + ".0/24"
+
+    def default_iface(self) -> str:
+        if self._iface is None:
+            txt = sh(["ip", "route"]) or ""
+            m = re.search(r"^default .* dev (\S+)", txt, re.M)
+            self._iface = m.group(1) if m else "eth0"
+        return self._iface
 
     def ufw_sources(self, port: int) -> list[str]:
         """Sources allowed by ufw for a port (needs root; [] if unreadable or no rule)."""
