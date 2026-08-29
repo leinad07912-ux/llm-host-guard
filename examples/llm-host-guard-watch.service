@@ -1,0 +1,15 @@
+# ~/.config/systemd/user/llm-host-guard-watch.service
+# systemctl --user daemon-reload && systemctl --user enable --now llm-host-guard-watch
+[Unit]
+Description=llm-host-guard continuous exposure watch
+After=network-online.target
+
+[Service]
+# holds LLM_HOST_GUARD_TELEGRAM_BOT_TOKEN / _CHAT_ID (or AGENT_FIREWALL_TELEGRAM_* — both accepted)
+EnvironmentFile=%h/.agent-firewall/env
+ExecStart=/usr/bin/python3 %h/projects/llm-host-guard/llm_host_guard.py --watch 30 --telegram --html %h/llm-host-report.html
+Restart=always
+RestartSec=30
+
+[Install]
+WantedBy=default.target

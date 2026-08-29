@@ -14,6 +14,14 @@ from pathlib import Path
 
 VERSION = "0.1.0"
 SEVERITIES = ["CRITICAL", "HIGH", "MED", "LOW", "INFO", "OK"]
+SEVERITY_HELP = {
+    "CRITICAL": "Wide open right now. Anyone on your network (or the internet) can use or damage your LLM today. Fix first.",
+    "HIGH": "A real hole, but an attacker needs one more thing (be on your WiFi, get you to open a file). Fix this week.",
+    "MED": "Exposed on purpose but wider than it needs to be. Tighten when convenient.",
+    "LOW": "Looks exposed but something else already blocks it. Just be aware.",
+    "INFO": "Not a problem, just something you should know exists.",
+    "OK": "Checked, nothing wrong.",
+}
 DATA_DIR = Path(__file__).parent / "data"
 
 

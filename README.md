@@ -37,7 +37,20 @@ Ollama, LM Studio, vLLM, llama.cpp and friends ship with **no authentication**, 
 | `config` | `OLLAMA_ORIGINS=*` (any website can drive your LLM from your browser), `OLLAMA_HOST=0.0.0.0`, vLLM / llama-server without `--api-key`, Open WebUI signup, sshd password auth |
 | `agents` | Claude Code / Cursor / Codex / MCP configs present → points you to agent-side tooling |
 
-Each finding carries the exact fix. Score = 10 − 3·CRITICAL − 2·HIGH − 1·MED.
+Each finding carries the exact fix.
+
+## What the levels mean
+
+| Level | Plain English |
+|---|---|
+| **CRITICAL** | Wide open right now. Anyone on your network (or the internet) can use or damage your LLM today. Fix first. |
+| **HIGH** | A real hole, but an attacker needs one more thing — be on your WiFi, or get you to open a file. Fix this week. |
+| **MED** | Exposed on purpose but wider than it needs to be. Tighten when convenient. |
+| **LOW** | Looks exposed but something else already blocks it. Just be aware. |
+| **INFO** | Not a problem, just something you should know exists. |
+| **OK** | Checked, nothing wrong. |
+
+Score starts at 10; each CRITICAL takes 3, HIGH 2, MED 1. Run with `sudo` so firewall rules that already protect a port get credited (a LAN-scoped Ollama drops from CRITICAL to MED, a DOCKER-USER-blocked container to LOW).
 
 ## Usage
 
@@ -46,11 +59,15 @@ python3 llm_host_guard.py                 # terminal report, exit 2=critical 1=h
 python3 llm_host_guard.py --json          # machine-readable
 python3 llm_host_guard.py --html report.html
 python3 llm_host_guard.py --watch 15 --webhook https://…   # rerun every 15 min, alert on new findings
+python3 llm_host_guard.py --watch 30 --telegram           # same, to Telegram (token/chat via env, see below)
+python3 llm_host_guard.py --watch 1 --once --telegram     # single diff pass, for cron
 python3 llm_host_guard.py --checks ports,docker --model-dir /data/models
 sudo python3 llm_host_guard.py            # optional: reads ufw rules + effective sshd config
 ```
 
 Run `--watch 30` under systemd / launchd for continuous monitoring; `--html` in watch mode keeps the report fresh.
+
+Telegram: create a bot with @BotFather, DM it once, get your chat id from `https://api.telegram.org/bot<TOKEN>/getUpdates`, then export `LLM_HOST_GUARD_TELEGRAM_BOT_TOKEN` and `LLM_HOST_GUARD_TELEGRAM_CHAT_ID` (a systemd `EnvironmentFile=` keeps them off the command line). `examples/llm-host-guard-watch.service` is a ready user unit.
 
 ## What it does not do
 
