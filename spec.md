@@ -110,3 +110,30 @@ HTML report and future `--serve`/hosted dashboard consume this exact object.
 - `--fix --yes` with a mocked runner executes exactly the printed commands, in order, and prints undo lines.
 - sshd recipe skipped with reason when the authorized-keys file is missing.
 - Re-running the audit after `--fix` shows the finding downgraded (MED/LOW/OK), not repeated.
+
+# v2 — `--internet` (2026-08-29)
+
+## What
+
+Opt-in check (`--internet`, or `--checks internet`) that answers "what does the outside already see?" Three outbound calls, each named in the finding: `api.ipify.org` (public IP), `internetdb.shodan.io/<ip>` (free, keyless: open ports + CVEs Shodan has indexed), and SSDP/UPnP to the LAN router (`GetGenericPortMappingEntry` walk).
+
+Off by default because v1 promised no external calls; the flag is the consent.
+
+## Findings
+
+| Condition | Severity |
+|---|---|
+| Shodan lists an LLM signature port open on the public IP | CRITICAL |
+| Shodan lists any open ports (or CVEs) on the public IP | HIGH |
+| Router UPnP forwards an LLM port to any host | CRITICAL |
+| Router UPnP forwards any port to this host | MED |
+| Mappings exist but not to this host | INFO |
+| Nothing | OK |
+
+No public IP → INFO (offline / blocked). Full Shodan API (key) and Censys = later; InternetDB covers the "am I already indexed?" question for free.
+
+## Acceptance
+
+- Parsers (InternetDB JSON, IGD description XML, SOAP mapping) tested on fixtures.
+- `run()` tested with all three network functions mocked: LLM-port-open and UPnP-forward both CRITICAL; clean → OK/OK; offline → INFO.
+- Not in the default check set; `--internet` adds it.

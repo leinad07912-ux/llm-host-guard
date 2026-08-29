@@ -36,6 +36,7 @@ Ollama, LM Studio, vLLM, llama.cpp and friends ship with **no authentication**, 
 | `versions` | Ollama / vLLM / llama.cpp / Open WebUI against a bundled CVE table |
 | `config` | `OLLAMA_ORIGINS=*` (any website can drive your LLM from your browser), `OLLAMA_HOST=0.0.0.0`, vLLM / llama-server without `--api-key`, Open WebUI signup, sshd password auth |
 | `agents` | Claude Code / Cursor / Codex / MCP configs present → points you to agent-side tooling |
+| `internet` (opt-in `--internet`) | What the outside already sees: your public IP's open ports + CVEs via Shodan InternetDB (free, keyless), and router UPnP port-forwards to LLM ports. The only check that makes outbound calls. |
 
 Each finding carries the exact fix.
 
@@ -61,6 +62,7 @@ python3 llm_host_guard.py --html report.html
 python3 llm_host_guard.py --watch 15 --webhook https://…   # rerun every 15 min, alert on new findings
 python3 llm_host_guard.py --watch 30 --telegram           # same, to Telegram (token/chat via env, see below)
 python3 llm_host_guard.py --watch 1 --once --telegram     # single diff pass, for cron
+python3 llm_host_guard.py --internet          # + Shodan InternetDB + router UPnP (outbound calls)
 python3 llm_host_guard.py --checks ports,docker --model-dir /data/models
 sudo python3 llm_host_guard.py            # optional: reads ufw rules + effective sshd config
 ```

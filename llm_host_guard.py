@@ -25,7 +25,7 @@ def run_checks(ctx: Ctx, names: list[str]) -> list[Finding]:
     out = []
     for n in names:
         try:
-            out += checks.ALL[n].run(ctx)
+            out += {**checks.ALL, **checks.OPTIONAL}[n].run(ctx)
         except Exception as e:  # a broken check must not kill the audit
             out.append(Finding(n, "INFO", f"check crashed: {type(e).__name__}: {e}"))
     out.sort(key=lambda f: SEVERITIES.index(f.severity))
@@ -151,12 +151,17 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--once", action="store_true", help="with --watch: single diff pass then exit (for cron)")
     ap.add_argument("--checks", default=",".join(checks.ALL), help=f"comma list of: {','.join(checks.ALL)}")
     ap.add_argument("--model-dir", action="append", default=[], help="extra model directory to scan")
+    ap.add_argument("--internet", action="store_true",
+                    help="also ask the outside: public IP (ipify), Shodan InternetDB, router UPnP mappings")
     ap.add_argument("--no-color", action="store_true")
     ap.add_argument("--fix", action="store_true", help="apply fix recipes (root); prints each command, asks y/N")
     ap.add_argument("--yes", action="store_true", help="with --fix: don't ask")
     ap.add_argument("--dry-run", action="store_true", help="with --fix: print recipes, run nothing, no root needed")
     a = ap.parse_args(argv)
-    names = [n.strip() for n in a.checks.split(",") if n.strip() in checks.ALL]
+    known = {**checks.ALL, **checks.OPTIONAL}
+    names = [n.strip() for n in a.checks.split(",") if n.strip() in known]
+    if a.internet and "internet" not in names:
+        names.append("internet")
 
     while True:
         ctx = Ctx(model_dirs=a.model_dir)
