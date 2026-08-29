@@ -10,7 +10,7 @@ NAME = "agents"
 
 def run(ctx: Ctx) -> list[Finding]:
     present = [t["name"] for t in ctx.signatures["agent_tools"]
-               if any(Path(p).expanduser().exists() for p in t["paths"])]
+               if any((ctx.home / p.removeprefix("~/")).exists() for p in t["paths"])]
     if not present:
         return [Finding(NAME, "OK", "No coding-agent tooling detected")]
     mcp_json = list(ctx.home.glob(".mcp.json")) + list(ctx.home.glob(".claude/**/mcp*.json"))
