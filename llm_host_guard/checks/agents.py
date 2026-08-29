@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from core import Ctx, Finding
+from llm_host_guard.core import Ctx, Finding
 
 NAME = "agents"
 

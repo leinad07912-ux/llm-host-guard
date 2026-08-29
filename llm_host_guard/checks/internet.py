@@ -11,7 +11,7 @@ import socket
 import urllib.request
 import xml.etree.ElementTree as ET
 
-from core import Ctx, Finding
+from llm_host_guard.core import Ctx, Finding
 
 NAME = "internet"
 SSDP = ("239.255.255.250", 1900)
@@ -144,7 +144,8 @@ def run(ctx: Ctx) -> list[Finding]:
     bad = [m for m in maps if m["internal"] in llm_ports or m["ext"] in llm_ports]
     mine = [m for m in maps if m["host"] == ctx.lan_ip]
     if bad:
-        out.append(Finding(NAME, "CRITICAL", f"Router UPnP forwards LLM port(s) to {', '.join(f'{m['host']}:{m['internal']}' for m in bad)}",
+        targets = ", ".join(f"{m['host']}:{m['internal']}" for m in bad)
+        out.append(Finding(NAME, "CRITICAL", f"Router UPnP forwards LLM port(s) to {targets}",
                            "Any app on the LAN can open these silently; this one exposes an inference server to the internet.",
                            "Delete the mapping in the router UI and disable UPnP; use a VPN (Tailscale/WireGuard) for remote access.",
                            {"mappings": bad}))

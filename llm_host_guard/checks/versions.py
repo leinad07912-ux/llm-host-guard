@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import re
 
-from core import Ctx, Finding, sh, version_lt
+from llm_host_guard.core import Ctx, Finding, sh, version_lt
 
 NAME = "versions"
 

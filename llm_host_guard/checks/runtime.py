@@ -10,7 +10,7 @@ import socket
 import struct
 from pathlib import Path
 
-from core import Ctx, Finding, is_private, sh
+from llm_host_guard.core import Ctx, Finding, is_private, sh
 
 NAME = "runtime"
 ALWAYS_BAD = {"sh", "bash", "dash", "zsh", "fish", "curl", "wget", "nc", "ncat", "netcat", "socat",

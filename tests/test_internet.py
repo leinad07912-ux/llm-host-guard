@@ -5,8 +5,8 @@ from pathlib import Path
 from unittest import mock
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-import core  # noqa: E402
-from checks import internet  # noqa: E402
+from llm_host_guard import core  # noqa: E402
+from llm_host_guard.checks import internet  # noqa: E402
 
 BASE = "http://router.local:5000"
 DESC = """<?xml version="1.0"?><root xmlns="urn:schemas-upnp-org:device-1-0"><device><deviceList><device>

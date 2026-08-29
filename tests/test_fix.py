@@ -5,9 +5,9 @@ from pathlib import Path
 from unittest import mock
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-import core  # noqa: E402
-import fix  # noqa: E402
-from checks import config, docker, firewall, ports  # noqa: E402
+from llm_host_guard import core  # noqa: E402
+from llm_host_guard import fix  # noqa: E402
+from llm_host_guard.checks import config, docker, firewall, ports  # noqa: E402
 
 
 def ctx_with(listeners, ufw="", lan="192.168.1.10"):

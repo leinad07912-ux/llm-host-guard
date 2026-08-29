@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import re
 
-from core import Ctx, Finding, sh
+from llm_host_guard.core import Ctx, Finding, sh
 
 NAME = "docker"
 _MAP = re.compile(r"(\S+):(\d+)->(\d+)/tcp")

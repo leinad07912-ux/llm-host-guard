@@ -7,7 +7,7 @@ import subprocess
 import sys
 from pathlib import Path
 
-from core import Ctx, Finding
+from llm_host_guard.core import Ctx, Finding
 
 DROPIN_OLLAMA = Path("/etc/systemd/system/ollama.service.d/llm-host-guard.conf")
 DROPIN_SSHD = Path("/etc/ssh/sshd_config.d/00-llm-host-guard.conf")

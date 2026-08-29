@@ -6,7 +6,7 @@ import stat
 import struct
 from pathlib import Path
 
-from core import Ctx, Finding
+from llm_host_guard.core import Ctx, Finding
 
 NAME = "models"
 PICKLE_EXT = {".pt", ".pth", ".bin", ".pkl", ".pickle", ".ckpt"}

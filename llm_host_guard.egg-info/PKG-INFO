@@ -1,22 +1,28 @@
+Metadata-Version: 2.4
+Name: llm-host-guard
+Version: 0.2.0
+Summary: Audit the attack surface of a machine running local LLMs (Ollama, LM Studio, vLLM, llama.cpp...). Stdlib only.
+License: MIT
+Project-URL: Homepage, https://github.com/leinad07912-ux/llm-host-guard
+Classifier: Topic :: Security
+Classifier: Programming Language :: Python :: 3
+Classifier: Operating System :: OS Independent
+Requires-Python: >=3.9
+Description-Content-Type: text/markdown
+License-File: LICENSE
+Dynamic: license-file
+
 # llm-host-guard
 
-**Is my Ollama / LM Studio / vLLM box open to the world?** One command tells you, in plain English, and fixes it if you say yes.
-
-## 30-second start
+Audit the attack surface of a machine running local LLMs. Stdlib only, changes nothing.
 
 ```
-pipx install git+https://github.com/leinad07912-ux/llm-host-guard    # or: pip install git+…
-llm-host-guard
+git clone https://github.com/leinad07912-ux/llm-host-guard && cd llm-host-guard
+python3 llm_host_guard.py
 ```
 
-No pipx? `git clone https://github.com/leinad07912-ux/llm-host-guard && cd llm-host-guard && python3 llm_host_guard.py` — no dependencies, Python 3.9+.
-
-You get a verdict line, a ranked list with a fix under every item, and the next command to run:
-
 ```
-llm-host-guard v0.2.0 — neo (Linux, 192.168.50.156)
-
-🔴 2 thing(s) to fix NOW, 2 this week   score 2/10
+llm-host-guard v0.1.0 — neo (Linux, 192.168.50.156)
 
 CRITICAL  Ollama on *:11434 reachable from LAN with no auth (7 models listed)
           fix: OLLAMA_HOST=127.0.0.1 … or `ufw allow from <LAN>/24 to any port 11434`
@@ -26,12 +32,7 @@ HIGH      3 pickle-format weight file(s) — execute code on load
 OK        ufw active, default deny incoming
 
 score: 2/10
-
-next: preview the fixes →  llm-host-guard --fix --dry-run
-      apply them        →  sudo llm-host-guard --fix
 ```
-
-Then: `sudo llm-host-guard --fix` walks each fix, shows the exact command, asks y/N, prints the undo. `llm-host-guard --open` gives the same report as a page in your browser. `sudo llm-host-guard --watch 30 --telegram` keeps watching and messages you only when something new opens up.
 
 ## Why
 
@@ -70,15 +71,15 @@ Score starts at 10; each CRITICAL takes 3, HIGH 2, MED 1. Run with `sudo` so fir
 ## Usage
 
 ```
-llm-host-guard                 # terminal report, exit 2=critical 1=high/med 0=clean
-llm-host-guard --json          # machine-readable
-llm-host-guard --html report.html         # self-contained page; --open writes it and opens your browser
-llm-host-guard --watch 15 --webhook https://…   # rerun every 15 min, alert on new findings
-llm-host-guard --watch 30 --telegram           # same, to Telegram (token/chat via env, see below)
-llm-host-guard --watch 1 --once --telegram     # single diff pass, for cron
-llm-host-guard --internet          # + Shodan InternetDB + router UPnP (outbound calls)
-llm-host-guard --checks ports,docker --model-dir /data/models
-sudo llm-host-guard            # optional: reads ufw rules + effective sshd config
+python3 llm_host_guard.py                 # terminal report, exit 2=critical 1=high/med 0=clean
+python3 llm_host_guard.py --json          # machine-readable
+python3 llm_host_guard.py --html report.html
+python3 llm_host_guard.py --watch 15 --webhook https://…   # rerun every 15 min, alert on new findings
+python3 llm_host_guard.py --watch 30 --telegram           # same, to Telegram (token/chat via env, see below)
+python3 llm_host_guard.py --watch 1 --once --telegram     # single diff pass, for cron
+python3 llm_host_guard.py --internet          # + Shodan InternetDB + router UPnP (outbound calls)
+python3 llm_host_guard.py --checks ports,docker --model-dir /data/models
+sudo python3 llm_host_guard.py            # optional: reads ufw rules + effective sshd config
 ```
 
 Run `--watch 30` under systemd / launchd for continuous monitoring; `--html` in watch mode keeps the report fresh.
@@ -88,9 +89,9 @@ Telegram: create a bot with @BotFather, DM it once, get your chat id from `https
 ## `--fix` (v2)
 
 ```
-llm-host-guard --fix --dry-run     # preview every recipe, no root, runs nothing
-sudo llm-host-guard --fix          # prints each command, asks y/N per finding
-sudo llm-host-guard --fix --yes    # unattended
+python3 llm_host_guard.py --fix --dry-run     # preview every recipe, no root, runs nothing
+sudo python3 llm_host_guard.py --fix          # prints each command, asks y/N per finding
+sudo python3 llm_host_guard.py --fix --yes    # unattended
 ```
 
 Recipes exist for: open LLM port → scoped ufw rule; ufw "Anywhere" rule on an LLM port → re-scoped; `OLLAMA_HOST=0.0.0.0` under systemd → loopback drop-in; container on 0.0.0.0 → DOCKER-USER drop; sshd password auth → `sshd_config.d/00-…` drop-in (only if you already have an SSH key installed — it will not lock you out).
@@ -106,9 +107,7 @@ Every recipe only *adds* a rule or a drop-in file, never edits an existing file,
 
 ## Platforms
 
-Linux and macOS first-class. Windows best-effort (`netstat -ano`, `netsh advfirewall`; use `py -m llm_host_guard` if `llm-host-guard` isn't on PATH). Python ≥ 3.9. No dependencies.
-
-Running from a clone without installing: `python3 llm_host_guard.py` or `python3 -m llm_host_guard` — identical.
+Linux and macOS first-class. Windows best-effort (`netstat -ano`, `netsh advfirewall`). Python ≥ 3.9. No dependencies.
 
 ## Contributing
 

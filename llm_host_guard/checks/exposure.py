@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import re
 
-from core import Ctx, Finding, is_private, sh
+from llm_host_guard.core import Ctx, Finding, is_private, sh
 
 NAME = "exposure"
 

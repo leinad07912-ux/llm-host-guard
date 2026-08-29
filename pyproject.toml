@@ -1,0 +1,24 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "llm-host-guard"
+version = "0.2.0"
+description = "Audit the attack surface of a machine running local LLMs (Ollama, LM Studio, vLLM, llama.cpp...). Stdlib only."
+readme = "README.md"
+license = {text = "MIT"}
+requires-python = ">=3.9"
+classifiers = ["Topic :: Security", "Programming Language :: Python :: 3", "Operating System :: OS Independent"]
+
+[project.urls]
+Homepage = "https://github.com/leinad07912-ux/llm-host-guard"
+
+[project.scripts]
+llm-host-guard = "llm_host_guard.cli:main"
+
+[tool.setuptools.packages.find]
+include = ["llm_host_guard*"]
+
+[tool.setuptools.package-data]
+llm_host_guard = ["data/*.json"]

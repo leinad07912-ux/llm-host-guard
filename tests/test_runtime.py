@@ -5,8 +5,8 @@ from pathlib import Path
 from unittest import mock
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-import core  # noqa: E402
-from checks import runtime  # noqa: E402
+from llm_host_guard import core  # noqa: E402
+from llm_host_guard.checks import runtime  # noqa: E402
 
 # pid: (ppid, comm)
 BASE = {1: (0, "systemd"), 100: (1, "ollama"), 101: (100, "ollama"), 200: (1, "llama-server"), 300: (1, "sshd")}

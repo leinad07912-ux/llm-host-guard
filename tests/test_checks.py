@@ -8,9 +8,9 @@ from pathlib import Path
 from unittest import mock
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-import core  # noqa: E402
-from checks import docker, models, ports, versions  # noqa: E402
-import llm_host_guard as g  # noqa: E402
+from llm_host_guard import core  # noqa: E402
+from llm_host_guard.checks import docker, models, ports, versions  # noqa: E402
+from llm_host_guard import cli as g  # noqa: E402
 
 SS = """LISTEN 0 4096 *:11434 *:* users:(("ollama",pid=1234,fd=3))
 LISTEN 0 4096 127.0.0.1:1234 0.0.0.0:* users:(("lms",pid=5,fd=3))

@@ -1,0 +1,307 @@
+{
+  "products": [
+    {
+      "name": "Ollama",
+      "ports": [
+        11434
+      ],
+      "procs": [
+        "ollama"
+      ],
+      "probe": [
+        "/api/tags",
+        "/api/version"
+      ],
+      "bind_fix": "OLLAMA_HOST=127.0.0.1 (systemd: `systemctl edit ollama` → [Service] Environment=OLLAMA_HOST=127.0.0.1)",
+      "children": [
+        "ollama",
+        "ollama_llama_server",
+        "ollama-runner",
+        "llama-server"
+      ]
+    },
+    {
+      "name": "LM Studio",
+      "ports": [
+        1234
+      ],
+      "procs": [
+        "lm studio",
+        "lms"
+      ],
+      "probe": [
+        "/v1/models"
+      ],
+      "bind_fix": "LM Studio → Developer → Server → uncheck 'Serve on Local Network'",
+      "children": [
+        "lms",
+        "*llama*",
+        "LM Studio*"
+      ]
+    },
+    {
+      "name": "vLLM",
+      "ports": [
+        8000
+      ],
+      "procs": [
+        "vllm"
+      ],
+      "probe": [
+        "/v1/models"
+      ],
+      "bind_fix": "vllm serve --host 127.0.0.1 --api-key <secret>",
+      "children": [
+        "python*",
+        "pt_main_thread",
+        "VLLM*",
+        "ray*"
+      ]
+    },
+    {
+      "name": "llama.cpp server",
+      "ports": [
+        8080,
+        8081
+      ],
+      "procs": [
+        "llama-server"
+      ],
+      "probe": [
+        "/v1/models",
+        "/health"
+      ],
+      "bind_fix": "llama-server --host 127.0.0.1 --api-key <secret>",
+      "children": []
+    },
+    {
+      "name": "Open WebUI",
+      "ports": [
+        3000,
+        8080
+      ],
+      "procs": [
+        "open-webui",
+        "open_webui"
+      ],
+      "probe": [
+        "/api/config"
+      ],
+      "bind_fix": "publish container on 127.0.0.1:3000:8080 and front with an authenticated reverse proxy",
+      "children": [
+        "python*",
+        "uvicorn"
+      ]
+    },
+    {
+      "name": "text-generation-webui",
+      "ports": [
+        7860,
+        5000,
+        5005
+      ],
+      "procs": [
+        "text-generation",
+        "server.py"
+      ],
+      "probe": [
+        "/v1/models"
+      ],
+      "bind_fix": "remove --listen flag; use --api-key",
+      "children": [
+        "python*"
+      ]
+    },
+    {
+      "name": "Jan",
+      "ports": [
+        1337
+      ],
+      "procs": [
+        "jan-",
+        "jan.exe",
+        "nitro"
+      ],
+      "probe": [
+        "/v1/models"
+      ],
+      "bind_fix": "Jan → Settings → Local API Server → host 127.0.0.1",
+      "children": [
+        "*nitro*",
+        "*cortex*",
+        "llama-server"
+      ]
+    },
+    {
+      "name": "koboldcpp",
+      "ports": [
+        5001
+      ],
+      "procs": [
+        "koboldcpp"
+      ],
+      "probe": [
+        "/api/v1/model"
+      ],
+      "bind_fix": "koboldcpp --host 127.0.0.1",
+      "children": [
+        "python*",
+        "koboldcpp*"
+      ]
+    },
+    {
+      "name": "LocalAI",
+      "ports": [
+        8080
+      ],
+      "procs": [
+        "local-ai",
+        "localai"
+      ],
+      "probe": [
+        "/v1/models"
+      ],
+      "bind_fix": "LOCALAI_ADDRESS=127.0.0.1:8080 and set API_KEY",
+      "children": [
+        "local-ai",
+        "llama-cpp*",
+        "*grpc*",
+        "piper",
+        "whisper*",
+        "stablediffusion*"
+      ]
+    },
+    {
+      "name": "Xinference",
+      "ports": [
+        9997
+      ],
+      "procs": [
+        "xinference"
+      ],
+      "probe": [
+        "/v1/models"
+      ],
+      "bind_fix": "xinference-local -H 127.0.0.1",
+      "children": [
+        "python*"
+      ]
+    },
+    {
+      "name": "Tabby / TabbyAPI",
+      "ports": [
+        5000
+      ],
+      "procs": [
+        "tabby"
+      ],
+      "probe": [
+        "/v1/models"
+      ],
+      "bind_fix": "config.yml network.host: 127.0.0.1",
+      "children": [
+        "python*"
+      ]
+    },
+    {
+      "name": "GPT4All",
+      "ports": [
+        4891
+      ],
+      "procs": [
+        "gpt4all"
+      ],
+      "probe": [
+        "/v1/models"
+      ],
+      "bind_fix": "disable 'Enable Local API Server' or bind loopback",
+      "children": [
+        "gpt4all*"
+      ]
+    },
+    {
+      "name": "SGLang",
+      "ports": [
+        30000
+      ],
+      "procs": [
+        "sglang"
+      ],
+      "probe": [
+        "/v1/models"
+      ],
+      "bind_fix": "--host 127.0.0.1 --api-key <secret>",
+      "children": [
+        "python*",
+        "sglang*"
+      ]
+    },
+    {
+      "name": "Wyoming (whisper/piper)",
+      "ports": [
+        10300,
+        10200
+      ],
+      "procs": [
+        "wyoming"
+      ],
+      "probe": [],
+      "bind_fix": "--uri tcp://127.0.0.1:10300 or firewall to LAN",
+      "children": [
+        "python*",
+        "wyoming*",
+        "piper*"
+      ]
+    }
+  ],
+  "agent_tools": [
+    {
+      "name": "Claude Code",
+      "paths": [
+        "~/.claude",
+        "~/.claude.json"
+      ]
+    },
+    {
+      "name": "Cursor",
+      "paths": [
+        "~/.cursor"
+      ]
+    },
+    {
+      "name": "Codex CLI",
+      "paths": [
+        "~/.codex"
+      ]
+    },
+    {
+      "name": "MCP config",
+      "paths": [
+        "~/.mcp.json",
+        "~/.config/mcp"
+      ]
+    },
+    {
+      "name": "OpenClaw",
+      "paths": [
+        "~/.openclaw"
+      ]
+    },
+    {
+      "name": "Hermes",
+      "paths": [
+        "~/.hermes"
+      ]
+    }
+  ],
+  "tunnels": [
+    "cloudflared",
+    "ngrok",
+    "bore",
+    "localtunnel",
+    "frpc",
+    "zrok",
+    "pinggy",
+    "tailscale funnel"
+  ]
+}

@@ -5,7 +5,7 @@ import http.client
 import json
 import shutil
 
-from core import Ctx, Finding, Listener
+from llm_host_guard.core import Ctx, Finding, Listener
 
 NAME = "ports"
 

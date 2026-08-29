@@ -4,8 +4,8 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
-from core import Ctx, Finding, sh
-import fix
+from llm_host_guard.core import Ctx, Finding, sh
+from llm_host_guard import fix
 
 NAME = "config"
 
