@@ -36,6 +36,7 @@ Ollama, LM Studio, vLLM, llama.cpp and friends ship with **no authentication**, 
 | `versions` | Ollama / vLLM / llama.cpp / Open WebUI against a bundled CVE table |
 | `config` | `OLLAMA_ORIGINS=*` (any website can drive your LLM from your browser), `OLLAMA_HOST=0.0.0.0`, vLLM / llama-server without `--api-key`, Open WebUI signup, sshd password auth |
 | `agents` | Claude Code / Cursor / Codex / MCP configs present → points you to agent-side tooling |
+| `runtime` | **Behaviour of the running server**: an LLM process that spawned a shell/downloader/unexpected child (the shape of a poisoned-model exploit) → CRITICAL; server or its children connected to a public IP (fine during a pull, otherwise not) → HIGH. `/proc` on Linux, `ps`+`lsof` on macOS, no root. `--checks runtime --watch 0.1` for a 6-second loop. |
 | `internet` (opt-in `--internet`) | What the outside already sees: your public IP's open ports + CVEs via Shodan InternetDB (free, keyless), and router UPnP port-forwards to LLM ports. The only check that makes outbound calls. |
 
 Each finding carries the exact fix.
@@ -88,6 +89,7 @@ Every recipe only *adds* a rule or a drop-in file, never edits an existing file,
 - Edit config files in place (`--fix` only adds drop-ins/rules)
 - Replace a firewall or IDS — it tells you when you're missing one
 - Detect prompt injection or scan MCP servers — see agent-firewall / mcp-sentinel
+- Kill anything: `runtime` detects and tells you the pid; agent-firewall's eBPF guard is the kill layer
 
 ## Platforms
 

@@ -137,3 +137,28 @@ No public IP → INFO (offline / blocked). Full Shodan API (key) and Censys = la
 - Parsers (InternetDB JSON, IGD description XML, SOAP mapping) tested on fixtures.
 - `run()` tested with all three network functions mocked: LLM-port-open and UPnP-forward both CRITICAL; clean → OK/OK; offline → INFO.
 - Not in the default check set; `--internet` adds it.
+
+# v2 — `runtime` check: inference-server behaviour (2026-08-29)
+
+## What
+
+A poisoned model file that hits a parser bug turns the inference server into the attacker's process. The symptoms are behavioural, not configurational: the server spawns something it never spawns, or talks to somewhere it never talks to. `runtime` snapshots exactly that, from `/proc` (Linux) or `ps`/`lsof` (macOS), no root, no eBPF, and rides the existing `--watch` loop so a short interval (`--checks runtime --watch 0.1`) gives near-real-time alerts with the same Telegram/webhook path.
+
+## Detection
+
+1. Find LLM server processes by signature `procs` match (same table as `ports`).
+2. Walk their descendants (pid/ppid tree).
+3. **Child allowlist** per product in `signatures.json` (`children`): Ollama → `ollama`, `ollama_llama_server`; vLLM/text-gen-webui → `python*`, `pt_main_thread`, `VLLM*`; default = same comm as the parent. Any other child → CRITICAL, with the full cmdline. A named shell/downloader/interpreter (`sh bash dash zsh curl wget nc ncat socat perl base64 ssh scp`) is CRITICAL even if a product lists it.
+4. **Established outbound TCP** from server or descendants: remote loopback/RFC1918/link-local → ignored; remote public → HIGH listing remote:port and the owning process. Note in the finding: expected during a model pull; in watch mode only new remotes alert.
+
+## Not doing
+
+Blocking/killing (agent-firewall's eBPF guard does that for agent trees; pointing it at LLM roots is a config change there, not code here). Syscall-level exec capture — a child that lives < one interval is missed; the interval is the user's knob.
+
+## Acceptance
+
+- Tree builder + `/proc/net/tcp` parser + classifier tested on fixtures.
+- Ollama with its `ollama runner` child and a LAN client connection → OK.
+- Ollama with a `sh -c …` child → CRITICAL naming the command.
+- llama-server with an established connection to a public IP → HIGH.
+- In default check set (cheap: one `ps`, one `/proc/net/tcp` read).
