@@ -85,6 +85,26 @@ class Docker(unittest.TestCase):
             self.assertEqual(ports.run(c)[0].severity, "OK")
 
 
+class Scoping(unittest.TestCase):
+    def test_ufw_scoped_downgrades_to_med(self):
+        c = ctx_with(core.parse_ss(SS))
+        c._ufw = "11434/tcp                  ALLOW IN    192.168.50.0/24            # Ollama for HA\n"
+        with mock.patch.object(ports, "probe", return_value={"/api/tags": {"status": 200, "models": 2}}):
+            f = ports.run(c)[0]
+        self.assertEqual(f.severity, "MED")
+        self.assertEqual(f.evidence["ufw_sources"], ["192.168.50.0/24"])
+
+    def test_docker_user_drop_downgrades(self):
+        c = ctx_with([])
+        c._docker_user = "-A DOCKER-USER -i wlp98s0 -p tcp -m multiport --dports 54321:54327 -j DROP\n-A DOCKER-USER -i wlp98s0 -p tcp --dport 11235 -j DROP\n"
+        self.assertTrue(c.docker_user_drops(54323) and c.docker_user_drops(11235))
+        self.assertFalse(c.docker_user_drops(8000))
+        ps = "kong\t0.0.0.0:54321->8000/tcp\nweb\t0.0.0.0:8000->80/tcp\n"
+        with mock.patch.object(docker, "sh", side_effect=lambda a, **k: ps if a[0] == "docker" else "x\n"):
+            sev = {x.evidence.get("port"): x.severity for x in docker.run(c) if x.evidence}
+        self.assertEqual((sev[54321], sev[8000]), ("LOW", "CRITICAL"))
+
+
 class Models(unittest.TestCase):
     def test_pickle_and_bad_gguf(self):
         with tempfile.TemporaryDirectory() as d:

@@ -29,6 +29,10 @@ def run(ctx: Ctx) -> list[Finding]:
     wild = sorted({(n, p) for n, a, p in parse_ps(ps) if a in ("0.0.0.0", "::", "[::]")})
     llm_ports = {p for sig in ctx.signatures["products"] for p in sig["ports"]}
     for name, port in wild:
+        if ctx.docker_user_drops(port):
+            out.append(Finding(NAME, "LOW", f"container {name} publishes 0.0.0.0:{port} but DOCKER-USER drops it",
+                               "Reachable only via loopback thanks to your DOCKER-USER rule.", "", {"container": name, "port": port}))
+            continue
         sev = "CRITICAL" if port in llm_ports else "HIGH"
         out.append(Finding(
             NAME, sev,
@@ -40,7 +44,10 @@ def run(ctx: Ctx) -> list[Finding]:
             {"container": name, "port": port},
         ))
     user_chain = sh(["iptables", "-L", "DOCKER-USER", "-n"])
-    if wild and user_chain is not None and user_chain.count("\n") <= 2:
+    if wild and user_chain is None:
+        out.append(Finding(NAME, "INFO", "DOCKER-USER chain unreadable without sudo",
+                           "Rerun with sudo to credit any DOCKER-USER DROP rules.", ""))
+    elif wild and user_chain.count("\n") <= 2:
         out.append(Finding(NAME, "MED", "DOCKER-USER chain is empty",
                            "No custom filtering applies to published container ports.",
                            "iptables -I DOCKER-USER -i <wan-if> ! -s <LAN>/24 -j DROP"))

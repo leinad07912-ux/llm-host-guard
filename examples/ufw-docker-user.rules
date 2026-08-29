@@ -1,0 +1,9 @@
+
+# llm-host-guard: keep dev containers off the LAN (Docker bypasses ufw INPUT).
+# Append to /etc/ufw/after.rules, adjust interface + ports, then `sudo ufw reload`.
+*filter
+:DOCKER-USER - [0:0]
+-A DOCKER-USER -i wlp98s0 -p tcp -m multiport --dports 54321:54327 -j DROP
+-A DOCKER-USER -i wlp98s0 -p tcp --dport 11235 -j DROP
+-A DOCKER-USER -j RETURN
+COMMIT

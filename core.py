@@ -174,6 +174,31 @@ class Ctx:
                 return sig
         return None
 
+    _ufw: str | None = None
+    _docker_user: str | None = None
+
+    def ufw_sources(self, port: int) -> list[str]:
+        """Sources allowed by ufw for a port (needs root; [] if unreadable or no rule)."""
+        if self._ufw is None:
+            self._ufw = sh(["ufw", "status"]) or ""
+        return [m.group(1) for m in re.finditer(rf"^{port}(?:/tcp)?\s+ALLOW IN\s+(\S+)", self._ufw, re.M)]
+
+    def docker_user_drops(self, port: int) -> bool:
+        """True if DOCKER-USER has a DROP rule covering this port (needs root)."""
+        if self._docker_user is None:
+            self._docker_user = sh(["iptables", "-S", "DOCKER-USER"]) or ""
+        for line in self._docker_user.splitlines():
+            if "-j DROP" not in line:
+                continue
+            if (m := re.search(r"--dport (\d+)", line)) and int(m.group(1)) == port:
+                return True
+            if (m := re.search(r"--dports ([\d:,]+)", line)):
+                for part in m.group(1).split(","):
+                    lo, _, hi = part.partition(":")
+                    if int(lo) <= port <= int(hi or lo):
+                        return True
+        return False
+
     def env_of_pid(self, pid: int) -> dict:
         try:
             raw = Path(f"/proc/{pid}/environ").read_bytes()

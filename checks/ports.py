@@ -43,12 +43,24 @@ def run(ctx: Ctx) -> list[Finding]:
         seen.add((sig["name"], l.port))
         hits = probe(ctx.lan_ip, l.port, sig.get("probe", [])) if sig.get("probe") else {}
         models = max((h.get("models", 0) for h in hits.values()), default=0)
-        if hits:
+        srcs = [x for x in ctx.ufw_sources(l.port) if x != "Anywhere"]
+        if hits and srcs:
+            out.append(Finding(
+                NAME, "MED",
+                f"{sig['name']} on {l.addr}:{l.port} open without auth, ufw-scoped to {', '.join(srcs)}",
+                "Every host in that source range gets unauthenticated access. Acceptable if the range is a "
+                "single trusted client; tighten to /32 if not.",
+                f"ufw allow from <client-ip> to any port {l.port}; or add an authenticating reverse proxy.",
+                {"port": l.port, "addr": l.addr, "proc": l.proc, "ufw_sources": srcs},
+            ))
+        elif hits:
             out.append(Finding(
                 NAME, "CRITICAL",
                 f"{sig['name']} on {l.addr}:{l.port} reachable from LAN with no auth"
                 + (f" ({models} models listed)" if models else ""),
-                f"Unauthenticated {', '.join(hits)} answered 200 from {ctx.lan_ip}. Anyone on your network "
+                f"Unauthenticated {', '.join(hits)} answered 200 from {ctx.lan_ip}. "
+                + ("(ufw rules unreadable without sudo — rerun with sudo to account for scoping.) " if not ctx.ufw_sources(l.port) and ctx._ufw == "" else "")
+                + "Anyone on your network "
                 f"(guest WiFi, IoT, a compromised phone) gets free inference, can list/pull/delete models, "
                 f"and can hit known parser CVEs.",
                 f"{sig['bind_fix']}  — or restrict: `ufw allow from <LAN>/24 to any port {l.port}` "
