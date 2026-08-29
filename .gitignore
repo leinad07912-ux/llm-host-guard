@@ -2,3 +2,6 @@ __pycache__/
 *.pyc
 *.html
 .llm-host-guard/
+dist/
+*.egg-info/
+build/

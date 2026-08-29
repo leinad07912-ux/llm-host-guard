@@ -5,7 +5,7 @@
 ## 30-second start
 
 ```
-pipx install git+https://github.com/leinad07912-ux/llm-host-guard    # or: pip install git+…
+pipx install llm-host-guard          # or: pip install llm-host-guard
 llm-host-guard
 ```
 
