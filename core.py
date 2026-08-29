@@ -145,7 +145,9 @@ class Ctx:
     def __init__(self, model_dirs: list[str] | None = None):
         self.os = platform.system()
         self.host = socket.gethostname()
-        self.home = Path.home()
+        # under sudo, audit the invoking user's model dirs / agent configs, not /root
+        su = os.environ.get("SUDO_USER")
+        self.home = Path(f"~{su}").expanduser() if su else Path.home()
         self.extra_model_dirs = [Path(p).expanduser() for p in (model_dirs or [])]
         self._listeners: list[Listener] | None = None
         self._lan_ip: str | None = None
@@ -181,7 +183,7 @@ class Ctx:
         """Sources allowed by ufw for a port (needs root; [] if unreadable or no rule)."""
         if self._ufw is None:
             self._ufw = sh(["ufw", "status"]) or ""
-        return [m.group(1) for m in re.finditer(rf"^{port}(?:/tcp)?\s+ALLOW IN\s+(\S+)", self._ufw, re.M)]
+        return [m.group(1) for m in re.finditer(rf"^{port}(?:/tcp)?\s+ALLOW(?: IN)?\s+(\S+)", self._ufw, re.M)]
 
     def docker_user_drops(self, port: int) -> bool:
         """True if DOCKER-USER has a DROP rule covering this port (needs root)."""

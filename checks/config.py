@@ -48,7 +48,8 @@ def run(ctx: Ctx) -> list[Finding]:
                                "With wildcard CORS, JavaScript on any page you visit can call localhost:11434 "
                                "from your browser — run prompts, pull/delete models, exfiltrate outputs.",
                                "Set OLLAMA_ORIGINS to the exact origins that need it (e.g. http://localhost:3000)."))
-        if env.get("OLLAMA_HOST", "").startswith(("0.0.0.0", ":", "[::]")):
+        scoped = [x for x in ctx.ufw_sources(11434) if x != "Anywhere"]
+        if env.get("OLLAMA_HOST", "").startswith(("0.0.0.0", ":", "[::]")) and not scoped:
             out.append(Finding(NAME, "HIGH", f"OLLAMA_HOST={env['OLLAMA_HOST']} (all interfaces)",
                                "", "OLLAMA_HOST=127.0.0.1 unless LAN clients need it; then firewall to LAN."))
     for l in ctx.listeners:

@@ -88,7 +88,7 @@ class Docker(unittest.TestCase):
 class Scoping(unittest.TestCase):
     def test_ufw_scoped_downgrades_to_med(self):
         c = ctx_with(core.parse_ss(SS))
-        c._ufw = "11434/tcp                  ALLOW IN    192.168.50.0/24            # Ollama for HA\n"
+        c._ufw = "11434/tcp                  ALLOW       192.168.50.0/24            # Ollama for HA\n"  # plain `ufw status` says ALLOW, verbose says ALLOW IN
         with mock.patch.object(ports, "probe", return_value={"/api/tags": {"status": 200, "models": 2}}):
             f = ports.run(c)[0]
         self.assertEqual(f.severity, "MED")

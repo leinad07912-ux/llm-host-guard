@@ -67,6 +67,9 @@ def run(ctx: Ctx) -> list[Finding]:
                 f"and put an authenticating reverse proxy in front.",
                 {"port": l.port, "addr": l.addr, "proc": l.proc, "probe": hits},
             ))
+        elif l.proc and srcs:
+            out.append(Finding(NAME, "LOW", f"{sig['name']} on {l.addr}:{l.port} non-loopback, ufw-scoped to {', '.join(srcs)}",
+                               "", "", {"port": l.port, "addr": l.addr, "proc": l.proc, "ufw_sources": srcs}))
         elif l.proc:  # process-confirmed LLM server; port-only guesses without probe hit are dropped
             out.append(Finding(
                 NAME, "HIGH",
