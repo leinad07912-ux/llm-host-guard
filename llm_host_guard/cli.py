@@ -168,6 +168,7 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--telegram", action="store_true",
                     help="send new findings to Telegram (watch mode); env LLM_HOST_GUARD_TELEGRAM_BOT_TOKEN + _CHAT_ID")
     ap.add_argument("--once", action="store_true", help="with --watch: single diff pass then exit (for cron)")
+    ap.add_argument("--telegram-test", action="store_true", help="send a hello to your Telegram chat and exit")
     ap.add_argument("--checks", default=",".join(checks.ALL), help=f"comma list of: {','.join(checks.ALL)}")
     ap.add_argument("--model-dir", action="append", default=[], help="extra model directory to scan")
     ap.add_argument("--internet", action="store_true",
@@ -179,6 +180,10 @@ def main(argv: list[str] | None = None) -> int:
     a = ap.parse_args(argv)
     if a.open and not a.html:
         a.html = "llm-host-guard-report.html"
+    if a.telegram_test:
+        post_telegram({"host": Ctx().host, "score": "-"}, [{"severity": "OK", "title": "connected ✅ — you will get a message here when something new opens up", "fix": ""}])
+        print("sent (if nothing arrived: check the two env vars and that you pressed Start on the bot)")
+        return 0
     known = {**checks.ALL, **checks.OPTIONAL}
     names = [n.strip() for n in a.checks.split(",") if n.strip() in known]
     if a.internet and "internet" not in names:

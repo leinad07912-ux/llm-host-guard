@@ -1,5 +1,7 @@
 # llm-host-guard
 
+Site: **https://leinad07912-ux.github.io/llm-host-guard/** (what it is, install, Telegram setup)
+
 **Is my Ollama / LM Studio / vLLM box open to the world?** One command tells you, in plain English, and fixes it if you say yes.
 
 ## 30-second start
