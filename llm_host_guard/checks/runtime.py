@@ -13,6 +13,10 @@ from pathlib import Path
 from llm_host_guard.core import Ctx, Finding, is_private, sh, vendor_for_ip
 
 NAME = "runtime"
+HISTORY = Path.home() / ".llm-host-guard" / "outbound.json"   # last-5-min snapshots, watch mode
+SCAN_NEW_PER_MIN = 10        # distinct NEW public destinations per minute over the window → scan
+BRUTE_SAME_PER_WINDOW = 20   # connects to one public host:port seen across snapshots in the window → brute force
+WINDOW_S = 300
 ALWAYS_BAD = {"sh", "bash", "dash", "zsh", "fish", "curl", "wget", "nc", "ncat", "netcat", "socat",
               "perl", "base64", "ssh", "scp", "sftp", "telnet", "busybox"}
 
@@ -111,7 +115,54 @@ def child_allowed(comm: str, parent_comm: str, allow: list[str]) -> bool:
     return c == parent_comm.lower() or any(fnmatch.fnmatch(c, a.lower()) for a in allow)
 
 
-def run(ctx: Ctx, table: dict | None = None, outbound=None) -> list[Finding]:
+def scan_signals(name: str, conns: list[tuple[int, str, int]], now: float | None = None,
+                 history_path: Path | None = None) -> list[Finding]:
+    """Compare this snapshot's public destinations with the last 5 min of snapshots (persisted per server name).
+    Returns CRITICAL 'looks like a scan' / HIGH 'looks like brute force' findings, or []."""
+    import json, time
+    now = time.time() if now is None else now
+    hp = history_path or HISTORY
+    try:
+        hist = json.loads(hp.read_text())
+    except (OSError, ValueError):
+        hist = {}
+    snaps = [s for s in hist.get(name, []) if now - s["ts"] <= WINDOW_S]
+    dests = sorted({f"{ip}:{port}" for _, ip, port in conns if not is_private(ip)})
+    seen_before = {d for s in snaps for d in s["dests"]}
+    new = [d for d in dests if d not in seen_before]
+    snaps.append({"ts": now, "dests": dests, "new": new})
+    hist[name] = snaps[-60:]
+    try:
+        hp.parent.mkdir(parents=True, exist_ok=True)
+        hp.write_text(json.dumps(hist))
+    except OSError:
+        pass
+    span_min = max(1.0, (now - snaps[0]["ts"]) / 60) if len(snaps) > 1 else 1.0
+    total_new = sum(len(s["new"]) for s in snaps)
+    per_min = total_new / span_min
+    out = []
+    if per_min >= SCAN_NEW_PER_MIN:
+        out.append(Finding(NAME, "CRITICAL", f"{name} opened connections to {total_new} different internet hosts in {span_min:.0f} min — looks like a scan",
+                           "A program that is probing the internet: many new destinations in a short time. A hijacked AI does exactly this.",
+                           "Unplug this machine from the network now, then stop the server and read the host page before reconnecting.",
+                           {"signal": "scan", "new_dests": total_new, "minutes": round(span_min, 1), "per_min": round(per_min, 1), "sample": new[:10]},
+                           risk="Risk: this machine may be attacking other systems right now."))
+    counts: dict[str, int] = {}
+    for s in snaps:
+        for d in s["dests"]:
+            counts[d] = counts.get(d, 0) + 1
+    hot = [(d, c) for d, c in counts.items() if c >= BRUTE_SAME_PER_WINDOW]
+    if hot:
+        d, c = max(hot, key=lambda x: x[1])
+        out.append(Finding(NAME, "HIGH", f"{name} hammered {d} {c} times in {span_min:.0f} min — looks like brute force",
+                           "Repeated connections to one internet host and port — the pattern of password guessing or a stuck retry loop.",
+                           "If you didn't start a download or sync to that host: stop the server and block the address with ufw.",
+                           {"signal": "bruteforce", "dest": d, "count": c, "minutes": round(span_min, 1)},
+                           risk="Risk: either this machine is attacking that host, or something is stuck — both need a look."))
+    return out
+
+
+def run(ctx: Ctx, table: dict | None = None, outbound=None, history_path: Path | None = None) -> list[Finding]:
     table = table if table is not None else proc_table()
     outbound = outbound or (outbound_mac if ctx.os == "Darwin" else outbound_linux)
     servers = []
@@ -137,7 +188,9 @@ def run(ctx: Ctx, table: dict | None = None, outbound=None) -> list[Finding]:
                                f"kill -9 {k}; stop {sig['name']}; check which model was loaded last and delete it; "
                                "inspect the server binary hash against a fresh download.",
                                {"server_pid": pid, "child_pid": k, "child": kcomm}))
-        pub = [(p, ip, port) for p, ip, port in outbound([pid] + kids) if not is_private(ip)]
+        conns = outbound([pid] + kids)
+        out += scan_signals(sig["name"], conns, history_path=history_path)
+        pub = [(p, ip, port) for p, ip, port in conns if not is_private(ip)]
         vendor = [(ip, port, vendor_for_ip(ip)) for _, ip, port in pub if vendor_for_ip(ip)]
         unknown = [(ip, port) for _, ip, port in pub if not vendor_for_ip(ip)]
         if vendor:
