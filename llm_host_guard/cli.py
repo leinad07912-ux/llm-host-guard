@@ -12,7 +12,7 @@ import urllib.request
 from pathlib import Path
 
 import os  # noqa: E402
-from llm_host_guard.core import VERSION, SEVERITIES, SEVERITY_HELP, Ctx, Finding, form_factor  # noqa: E402
+from llm_host_guard.core import VERSION, SEVERITIES, SEVERITY_HELP, RISK_LINE, Ctx, Finding, form_factor  # noqa: E402
 from llm_host_guard import checks
 
 STATE = Path.home() / ".llm-host-guard" / "state.json"
@@ -136,11 +136,17 @@ def post_telegram(rep: dict, new: list[dict]) -> None:
         print("telegram: set LLM_HOST_GUARD_TELEGRAM_BOT_TOKEN and _CHAT_ID", file=sys.stderr)
         return
     icon = {"CRITICAL": "🔴", "HIGH": "🟠", "MED": "🟡"}
-    lines = [f"🛡 llm-host-guard — {rep['host']} score {rep['score']}/10", f"{len(new)} new exposure(s):"]
-    for f in new[:10]:
-        lines.append(f"{icon.get(f['severity'], '•')} {f['severity']} {f['title']}")
+    word = {"CRITICAL": "Urgent", "HIGH": "Fix this week", "MED": "Tighten when convenient", "LOW": "FYI", "INFO": "FYI", "OK": "OK"}
+    lines = [f"🛡 {rep['host']}: {len(new)} new thing(s) found — score {rep['score']}/10", ""]
+    for f in new[:6]:
+        lines.append(f"{icon.get(f['severity'], '•')} {word.get(f['severity'], f['severity'])}: {f['title']}")
+        if RISK_LINE.get(f["severity"]):
+            lines.append(f"   {RISK_LINE[f['severity']]}")
         if f["fix"]:
-            lines.append(f"   fix: {f['fix'][:160]}")
+            lines.append(f"   What to do: {f['fix'][:180]}")
+        lines.append("")
+    if len(new) > 6:
+        lines.append(f"…and {len(new) - 6} more in the report.")
     body = {"chat_id": chat, "text": "\n".join(lines)[:4000], "disable_web_page_preview": True}
     try:
         req = urllib.request.Request(f"https://api.telegram.org/bot{token}/sendMessage",

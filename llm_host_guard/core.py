@@ -12,8 +12,17 @@ import subprocess
 from dataclasses import dataclass, field, asdict
 from pathlib import Path
 
-VERSION = "0.3.3"
+VERSION = "0.3.4"
 SEVERITIES = ["CRITICAL", "HIGH", "MED", "LOW", "INFO", "OK"]
+# One-line "so what" per severity, used in Telegram/fleet messages.
+RISK_LINE = {
+    "CRITICAL": "Risk: anyone on your network or the internet can reach this right now.",
+    "HIGH": "Risk: a real hole — someone on your WiFi, or a file you open, could use it.",
+    "MED": "Risk: on purpose but wider than needed; tighten when you can.",
+    "LOW": "Risk: low — something else already blocks it.",
+    "INFO": "Risk: none — just so you know.",
+    "OK": "",
+}
 SEVERITY_HELP = {
     "CRITICAL": "Wide open right now. Anyone on your network (or the internet) can use or damage your LLM today. Fix first.",
     "HIGH": "A real hole, but an attacker needs one more thing (be on your WiFi, get you to open a file). Fix this week.",
