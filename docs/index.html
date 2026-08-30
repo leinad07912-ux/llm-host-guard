@@ -50,6 +50,7 @@ nav .brand{font-family:"JetBrains Mono",monospace;font-weight:600;text-decoratio
 nav .links{display:flex;gap:1.4rem;font-weight:600}
 nav .links a{text-decoration:none;color:var(--ink)}
 nav .links a:hover{color:var(--accent)}
+nav .ver{font-family:"JetBrains Mono",monospace;font-weight:600;font-size:.85rem;color:var(--accent);border:1px solid var(--line);padding:.15rem .5rem;border-radius:999px}
 .hero{padding:3rem 0 4rem;display:grid;grid-template-columns:1fr;gap:2.2rem}
 @media (min-width:900px){.hero{grid-template-columns:1.05fr 1fr;align-items:center}}
 .hero p.lede{font-size:1.25rem;margin-top:1.2rem;color:var(--muted)}
@@ -96,6 +97,7 @@ footer .row{display:flex;gap:1.5rem;flex-wrap:wrap}
     <a href="#telegram">Telegram</a>
     <a href="#teams">Teams</a>
     <a href="https://github.com/leinad07912-ux/llm-host-guard">GitHub</a>
+    <a href="https://pypi.org/project/llm-host-guard/" class="ver" title="latest release on PyPI">v<span data-ver>0.3.4</span></a>
   </div>
 </nav>
 
@@ -112,7 +114,7 @@ footer .row{display:flex;gap:1.5rem;flex-wrap:wrap}
       <a class="btn ghost" href="#telegram">Get alerts on Telegram</a>
     </div>
   </div>
-  <pre aria-label="Example report" style="font-size:.78rem"><code><span class="dim">llm-host-guard v0.2.0 — studio-pc (Linux, 192.168.1.20)</span>
+  <pre aria-label="Example report" style="font-size:.78rem"><code><span class="dim">llm-host-guard v<span data-ver>0.3.4</span> — studio-pc (Linux, 192.168.1.20)</span>
 
 🔴 2 thing(s) to fix NOW, 2 this week   score 2/10
 
@@ -244,5 +246,11 @@ export LLM_HOST_GUARD_TELEGRAM_CHAT_ID=987654321</code></pre></div></div>
   </div>
 </footer>
 </div>
+<script>
+// keep the version current without editing the page: PyPI JSON is CORS-enabled; silent fallback to the baked-in number
+fetch("https://pypi.org/pypi/llm-host-guard/json").then(r=>r.json()).then(j=>{
+  const v=j.info.version; document.querySelectorAll("[data-ver]").forEach(e=>e.textContent=v);
+}).catch(()=>{});
+</script>
 </body>
 </html>
