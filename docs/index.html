@@ -1,0 +1,237 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>llm-host-guard</title>
+<meta name="description" content="One command that tells you whether the computer running your local LLM is open to the world — and fixes it if you say yes.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700;12..96,800&family=Source+Sans+3:wght@400;600&family=JetBrains+Mono:wght@400;600&display=swap">
+<style>
+:root{
+  --bg:#F3F5F4; --surface:#FFFFFF; --ink:#16211C; --muted:#5B6863; --line:#D6DDDA;
+  --accent:#0E5C63; --accent-ink:#FFFFFF; --tag-fg:#FFFFFF; --code-bg:#16211C; --code-fg:#E6ECE9;
+  --crit:#B3261E; --high:#B85C1A; --med:#8A6D0B; --low:#2F5F8A; --ok:#2F7A4B;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#0F1614; --surface:#182120; --ink:#E6ECE9; --muted:#9AA8A2; --line:#2A3633;
+    --accent:#5FC2C9; --accent-ink:#0F1614; --tag-fg:#0F1614; --code-bg:#0A0F0E; --code-fg:#DDE5E1;
+    --crit:#F28B82; --high:#F0A860; --med:#E2C25A; --low:#8CBCE6; --ok:#7CCB95;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#0F1614; --surface:#182120; --ink:#E6ECE9; --muted:#9AA8A2; --line:#2A3633;
+  --accent:#5FC2C9; --accent-ink:#0F1614; --tag-fg:#0F1614; --code-bg:#0A0F0E; --code-fg:#DDE5E1;
+  --crit:#F28B82; --high:#F0A860; --med:#E2C25A; --low:#8CBCE6; --ok:#7CCB95;
+}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth}
+@media (prefers-reduced-motion: reduce){html{scroll-behavior:auto}}
+body{margin:0;background:var(--bg);color:var(--ink);font:17px/1.55 "Source Sans 3",system-ui,sans-serif}
+a{color:var(--accent)}
+a:focus-visible,button:focus-visible{outline:3px solid var(--accent);outline-offset:2px}
+.wrap{max-width:68rem;margin:0 auto;padding:0 1.5rem}
+h1,h2,h3{font-family:"Bricolage Grotesque","Source Sans 3",sans-serif;text-wrap:balance;line-height:1.05;margin:0}
+h1{font-size:clamp(2.4rem,6vw,4.4rem);font-weight:800;letter-spacing:-.02em}
+h2{font-size:clamp(1.6rem,3vw,2.2rem);font-weight:700;letter-spacing:-.01em}
+h3{font-size:1.15rem;font-weight:700}
+p{max-width:38rem;margin:0}
+.eyebrow{font-family:"JetBrains Mono",monospace;font-size:.78rem;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+code,pre{font-family:"JetBrains Mono",ui-monospace,monospace}
+code{font-size:.9em;background:var(--surface);border:1px solid var(--line);padding:.1em .35em;border-radius:4px}
+pre{background:var(--code-bg);color:var(--code-fg);padding:1rem 1.2rem;border-radius:8px;overflow-x:auto;font-size:.88rem;line-height:1.5;margin:0}
+pre code{background:none;border:0;padding:0;font-size:inherit;color:inherit}
+pre .c{color:#7FA89C}
+pre .crit{color:#F28B82;font-weight:600} pre .high{color:#F0A860;font-weight:600} pre .med{color:#E2C25A;font-weight:600} pre .ok{color:#7CCB95;font-weight:600} pre .low{color:#8CBCE6;font-weight:600}
+pre .dim{color:#8A9994}
+nav{display:flex;justify-content:space-between;align-items:center;padding:1.2rem 0;gap:1rem;flex-wrap:wrap}
+nav .brand{font-family:"JetBrains Mono",monospace;font-weight:600;text-decoration:none;color:var(--ink)}
+nav .links{display:flex;gap:1.4rem;font-weight:600}
+nav .links a{text-decoration:none;color:var(--ink)}
+nav .links a:hover{color:var(--accent)}
+.hero{padding:3rem 0 4rem;display:grid;grid-template-columns:1fr;gap:2.2rem}
+@media (min-width:900px){.hero{grid-template-columns:1.05fr 1fr;align-items:center}}
+.hero p.lede{font-size:1.25rem;margin-top:1.2rem;color:var(--muted)}
+.cta{display:flex;gap:.8rem;flex-wrap:wrap;margin-top:1.8rem;align-items:center}
+.btn{display:inline-block;background:var(--accent);color:var(--accent-ink);text-decoration:none;font-weight:600;padding:.75rem 1.2rem;border-radius:6px}
+.btn.ghost{background:transparent;color:var(--ink);border:1px solid var(--line)}
+.install{display:flex;align-items:center;gap:.6rem;margin-top:1.4rem}
+.install pre{flex:1;padding:.8rem 1rem}
+section{padding:3.5rem 0;border-top:1px solid var(--line)}
+section header{margin-bottom:1.8rem}
+section header p{color:var(--muted);margin-top:.5rem}
+.grid{display:grid;gap:1rem;grid-template-columns:repeat(auto-fit,minmax(15rem,1fr))}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:1.2rem}
+.card h3{margin-bottom:.4rem}
+.card p{font-size:.98rem;color:var(--muted)}
+.card code{font-size:.8em}
+.levels{display:grid;gap:.6rem}
+.level{display:grid;grid-template-columns:7.5rem 1fr;gap:1rem;align-items:baseline;padding:.7rem 0;border-bottom:1px solid var(--line)}
+.level:last-child{border-bottom:0}
+.tag{font-family:"JetBrains Mono",monospace;font-size:.78rem;font-weight:600;letter-spacing:.04em;padding:.2rem .5rem;border-radius:4px;color:var(--tag-fg);display:inline-block}
+.tag.crit{background:var(--crit)} .tag.high{background:var(--high)} .tag.med{background:var(--med)} .tag.low{background:var(--low)} .tag.ok{background:var(--ok)} .tag.info{background:var(--muted)}
+.steps{display:grid;gap:1.4rem;counter-reset:step}
+.step{display:grid;grid-template-columns:3rem 1fr;gap:1rem;align-items:start}
+.step .n{font-family:"Bricolage Grotesque",sans-serif;font-weight:800;font-size:2rem;line-height:1;color:var(--accent);font-variant-numeric:tabular-nums}
+.step h3{margin-bottom:.3rem}
+.step p{color:var(--muted);margin-bottom:.6rem}
+.step pre{margin-top:.5rem}
+.note{background:var(--surface);border-left:3px solid var(--accent);padding:.8rem 1rem;border-radius:0 6px 6px 0;font-size:.95rem;max-width:38rem}
+.two{display:grid;gap:2rem;grid-template-columns:1fr}
+@media (min-width:900px){.two{grid-template-columns:1fr 1fr}}
+footer{padding:2.5rem 0 3rem;color:var(--muted);font-size:.92rem;border-top:1px solid var(--line)}
+footer .row{display:flex;gap:1.5rem;flex-wrap:wrap}
+.tg{display:inline-block;background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:.8rem 1rem;font-size:.92rem;max-width:26rem;line-height:1.45}
+.tg .from{font-weight:600;color:var(--accent);font-size:.85rem}
+</style>
+</head>
+<body>
+<div class="wrap">
+<nav>
+  <a class="brand" href="#">llm-host-guard</a>
+  <div class="links">
+    <a href="#checks">What it checks</a>
+    <a href="#install">Install</a>
+    <a href="#telegram">Telegram</a>
+    <a href="https://github.com/leinad07912-ux/llm-host-guard">GitHub</a>
+  </div>
+</nav>
+
+<div class="hero">
+  <div>
+    <div class="eyebrow">for anyone running Ollama · LM Studio · vLLM · llama.cpp at home</div>
+    <h1 style="margin-top:.8rem">Is the computer running your local LLM open to the world?</h1>
+    <p class="lede">One command answers in plain English, ranks what it found, puts the exact fix under each item — and applies the fixes if you say yes. No account, no cloud, nothing installed but a 50 KB Python package.</p>
+    <div class="install">
+      <pre><code>pipx install llm-host-guard &amp;&amp; llm-host-guard</code></pre>
+    </div>
+    <div class="cta">
+      <a class="btn" href="#install">Install in 30 seconds</a>
+      <a class="btn ghost" href="#telegram">Get alerts on Telegram</a>
+    </div>
+  </div>
+  <pre aria-label="Example report"><code><span class="dim">llm-host-guard v0.2.0 — studio-pc (Linux, 192.168.1.20)</span>
+
+🔴 2 thing(s) to fix NOW, 2 this week   score 2/10
+
+<span class="crit">CRITICAL </span> Ollama on *:11434 reachable from LAN with no auth (7 models listed)
+          <span class="c">fix: OLLAMA_HOST=127.0.0.1 … or ufw allow from 192.168.1.0/24 to any port 11434</span>
+<span class="crit">CRITICAL </span> container open-webui publishes 0.0.0.0:8080 — bypasses host firewall
+<span class="high">HIGH     </span> sshd PasswordAuthentication yes
+<span class="high">HIGH     </span> 3 pickle-format weight file(s) — execute code on load
+<span class="ok">OK       </span> ufw active, default deny incoming
+<span class="ok">OK       </span> 2 LLM server(s): children as expected, no public outbound
+
+<span class="dim">next: preview the fixes →  llm-host-guard --fix --dry-run
+      apply them        →  sudo llm-host-guard --fix</span></code></pre>
+</div>
+
+<section id="why">
+  <header>
+    <div class="eyebrow">why this exists</div>
+    <h2>Local LLM servers ship wide open. Nobody tells you.</h2>
+  </header>
+  <div class="two">
+    <p>Ollama, LM Studio, vLLM and llama.cpp have <strong>no password</strong> by default. Many bind to every network interface, so anyone on your Wi-Fi — a guest, a smart bulb, a phone with a bad app — can run prompts, list and delete your models, or poke at known parser bugs. Tens of thousands of open Ollama servers are already indexed on Shodan.</p>
+    <p>Model files add a second problem: <code>.pt</code> / <code>.bin</code> weights run code the moment they load, and a crafted GGUF can crash or hijack the server. Existing tools cover coding agents (agent-firewall, mcp-sentinel) or generic hardening (lynis). None look at the LLM host specifically. This one does, and it changes nothing unless you ask.</p>
+  </div>
+</section>
+
+<section id="checks">
+  <header>
+    <div class="eyebrow">what it checks</div>
+    <h2>Nine checks, one screen</h2>
+    <p>Each finding comes with the exact command that fixes it. Run with <code>sudo</code> and rules that already protect a port get credited — a LAN-scoped Ollama drops from CRITICAL to MED.</p>
+  </header>
+  <div class="grid">
+    <div class="card"><h3>Exposed ports</h3><p>Finds 14 LLM servers by process and port, then <em>actually calls the API from your LAN address</em> to prove it answers without a password.</p></div>
+    <div class="card"><h3>Firewall</h3><p>ufw, firewalld, nftables, macOS pf, Windows Firewall — missing, off, not default-deny, or letting an LLM port in from Anywhere.</p></div>
+    <div class="card"><h3>Docker bypass</h3><p>A container published on <code>0.0.0.0</code> skips your firewall entirely. Most people don't know this.</p></div>
+    <div class="card"><h3>Internet exposure</h3><p>Public IP on an interface; cloudflared / ngrok / frp tunnels running. Opt-in <code>--internet</code> adds Shodan and a router UPnP scan.</p></div>
+    <div class="card"><h3>Model files</h3><p>Pickle weights that execute on load, malformed GGUF / safetensors headers, world-writable model folders.</p></div>
+    <div class="card"><h3>Known CVEs</h3><p>Ollama, vLLM, llama.cpp, Open WebUI versions against a bundled advisory table.</p></div>
+    <div class="card"><h3>Config</h3><p><code>OLLAMA_ORIGINS=*</code> (any website can drive your LLM from your browser), missing API keys, open signup, SSH password login.</p></div>
+    <div class="card"><h3>Server behaviour</h3><p>Your inference server just spawned a shell, or is talking to a public IP with no download running. That's what a poisoned model looks like.</p></div>
+    <div class="card"><h3>Agent tooling</h3><p>Claude Code, Cursor, Codex, MCP configs on the box — flagged so you know, with a pointer to the right tool for that layer.</p></div>
+  </div>
+</section>
+
+<section id="levels">
+  <header>
+    <div class="eyebrow">what the levels mean</div>
+    <h2>No jargon in the verdict</h2>
+  </header>
+  <div class="levels">
+    <div class="level"><span class="tag crit">CRITICAL</span><p>Wide open right now. Anyone on your network (or the internet) can use or damage your LLM today. Fix first.</p></div>
+    <div class="level"><span class="tag high">HIGH</span><p>A real hole, but an attacker needs one more thing — be on your Wi-Fi, or get you to open a file. Fix this week.</p></div>
+    <div class="level"><span class="tag med">MED</span><p>Exposed on purpose but wider than it needs to be. Tighten when convenient.</p></div>
+    <div class="level"><span class="tag low">LOW</span><p>Looks exposed but something else already blocks it. Just be aware.</p></div>
+    <div class="level"><span class="tag info">INFO</span><p>Not a problem, just something you should know exists.</p></div>
+    <div class="level"><span class="tag ok">OK</span><p>Checked, nothing wrong.</p></div>
+  </div>
+  <p style="margin-top:1.2rem;color:var(--muted)">Score starts at 10. CRITICAL costs 3, HIGH 2, MED 1.</p>
+</section>
+
+<section id="install">
+  <header>
+    <div class="eyebrow">install</div>
+    <h2>Three commands, start to fixed</h2>
+    <p>Python 3.9 or newer is the only requirement. Linux and macOS first-class; Windows works with <code>py -m llm_host_guard</code>.</p>
+  </header>
+  <div class="steps">
+    <div class="step"><div class="n">1</div><div><h3>Install</h3><p>pipx keeps it isolated; plain pip works too. No pipx? <code>git clone</code> the repo and run <code>python3 llm_host_guard.py</code>.</p><pre><code>pipx install llm-host-guard</code></pre></div></div>
+    <div class="step"><div class="n">2</div><div><h3>Audit</h3><p>Read-only. <code>sudo</code> is optional but gives the accurate score because firewall rules become readable.</p><pre><code>sudo llm-host-guard</code></pre></div></div>
+    <div class="step"><div class="n">3</div><div><h3>Fix — if you say yes</h3><p>Preview first. Then each fix shows its exact command, asks y/N, and prints the undo. Fixes only add firewall rules or drop-in files; they never edit an existing config, and SSH password login is only disabled if you already have a key installed.</p><pre><code>llm-host-guard --fix --dry-run
+sudo llm-host-guard --fix</code></pre></div></div>
+  </div>
+  <p style="margin-top:1.6rem" class="note">Prefer a page? <code>llm-host-guard --open</code> writes a self-contained HTML report and opens it in your browser. <code>--json</code> for scripts.</p>
+</section>
+
+<section id="telegram">
+  <header>
+    <div class="eyebrow">alerts</div>
+    <h2>Get a Telegram message when something opens up</h2>
+    <p>Watch mode re-checks on a schedule and messages you <em>only</em> when a new exposure appears — a container that started on 0.0.0.0, a firewall rule that vanished, your LLM server spawning a shell. Silence means nothing changed.</p>
+  </header>
+  <div class="two">
+    <div class="steps">
+      <div class="step"><div class="n">1</div><div><h3>Create a bot</h3><p>In Telegram, open <strong>@BotFather</strong>, send <code>/newbot</code>, pick a name and a username ending in <code>bot</code>. BotFather replies with a token like <code>123456789:AAH…</code>. Keep it private.</p></div></div>
+      <div class="step"><div class="n">2</div><div><h3>Say hello to your bot</h3><p>Open the bot's chat and press <strong>Start</strong> (or send any message). Bots can't message you until you do this once.</p></div></div>
+      <div class="step"><div class="n">3</div><div><h3>Find your chat id</h3><p>Paste this into a browser, with your token in place of <code>TOKEN</code>. In the reply, look for <code>"chat":{"id":…}</code> — that number is your chat id.</p><pre><code>https://api.telegram.org/botTOKEN/getUpdates</code></pre></div></div>
+      <div class="step"><div class="n">4</div><div><h3>Tell llm-host-guard</h3><p>Two environment variables. Put them in your shell profile, or a systemd <code>EnvironmentFile</code>, so they never appear on a command line.</p><pre><code>export LLM_HOST_GUARD_TELEGRAM_BOT_TOKEN=123456789:AAH…
+export LLM_HOST_GUARD_TELEGRAM_CHAT_ID=987654321</code></pre></div></div>
+      <div class="step"><div class="n">5</div><div><h3>Test it</h3><p>You should get a message within a second.</p><pre><code>llm-host-guard --telegram-test</code></pre></div></div>
+      <div class="step"><div class="n">6</div><div><h3>Keep it running</h3><p>Every 30 minutes, root so firewall rules are credited, HTML report refreshed alongside. <a href="https://github.com/leinad07912-ux/llm-host-guard/blob/main/examples/llm-host-guard-watch.service">A ready systemd unit</a> is in the repo; on a Mac use launchd, or a cron line with <code>--once</code>.</p><pre><code>sudo llm-host-guard --watch 30 --telegram --html ~/llm-host-report.html</code></pre></div></div>
+    </div>
+    <div>
+      <div class="eyebrow" style="margin-bottom:.8rem">what arrives</div>
+      <div class="tg"><div class="from">llm-host-guard bot</div>connected ✅ — you will get a message here when something new opens up</div>
+      <div style="height:.8rem"></div>
+      <div class="tg"><div class="from">llm-host-guard bot</div>🛡 llm-host-guard — studio-pc score 5/10<br>1 new exposure(s):<br>🔴 CRITICAL container open-webui publishes 0.0.0.0:8080 — bypasses host firewall<br>&nbsp;&nbsp;&nbsp;fix: Publish on loopback: -p 127.0.0.1:8080:8080; or set "ip": "127.0.0.1" in /etc/docker/daemon.json</div>
+      <p style="margin-top:1.4rem;color:var(--muted);font-size:.95rem">Already have a bot for something else? Reuse it — the same token works for any number of tools. Prefer a webhook? <code>--webhook URL</code> posts the same JSON anywhere.</p>
+    </div>
+  </div>
+</section>
+
+<section id="not">
+  <header>
+    <div class="eyebrow">honest limits</div>
+    <h2>What it doesn't do</h2>
+  </header>
+  <div class="grid">
+    <div class="card"><h3>It isn't a firewall</h3><p>It tells you when you're missing one and writes the rule if you ask. The rule still runs in ufw.</p></div>
+    <div class="card"><h3>It doesn't kill anything</h3><p>Server behaviour is detected and reported with the pid. Blocking lives in <a href="https://github.com/leinad07912-ux/agent-firewall">agent-firewall</a>.</p></div>
+    <div class="card"><h3>It doesn't read your prompts</h3><p>No prompt-injection scanning, no content inspection. Ports, files, config, process behaviour — that's the scope.</p></div>
+  </div>
+</section>
+
+<footer>
+  <div class="row">
+    <span>MIT · stdlib only · <a href="https://github.com/leinad07912-ux/llm-host-guard">source</a> · <a href="https://pypi.org/project/llm-host-guard/">PyPI</a></span>
+    <span>Built by <a href="https://homeauto.sg">HomeAuto Solutions</a>, Singapore</span>
+  </div>
+</footer>
+</div>
+</body>
+</html>
