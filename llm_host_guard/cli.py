@@ -276,7 +276,9 @@ def main(argv: list[str] | None = None) -> int:
     if tg_buttons:
         import threading
         from llm_host_guard import actions
-        threading.Thread(target=actions.poll_loop, args=(lambda: False,), daemon=True).start()
+        # LLM_HOST_GUARD_TELEGRAM_SHARED=1: another program owns getUpdates for this bot and forwards taps to our socket
+        target = actions.serve_socket if os.getenv("LLM_HOST_GUARD_TELEGRAM_SHARED") == "1" else actions.poll_loop
+        threading.Thread(target=target, args=(lambda: False,), daemon=True).start()
     while True:
         ctx = Ctx(model_dirs=a.model_dir)
         findings = run_checks(ctx, names)

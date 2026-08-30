@@ -107,6 +107,46 @@ def handle_callback(cq: dict, runner=run_cmds) -> str:
     return ""
 
 
+SOCKET_PATH = os.getenv("LLM_HOST_GUARD_ACTIONS_SOCKET", "/run/llm-host-guard/actions.sock")
+
+
+def serve_socket(stop, runner=run_cmds, path: str = SOCKET_PATH, group: str | None = None) -> None:
+    """Shared-bot mode: another program (e.g. agent-firewall's Kill Switch bot) owns getUpdates and forwards
+    our callback_query JSON here, one per connection; we reply {"text": ..., "keyboard": ...}."""
+    import grp, socket as _s
+    Path(path).parent.mkdir(parents=True, exist_ok=True)
+    try:
+        os.unlink(path)
+    except FileNotFoundError:
+        pass
+    srv = _s.socket(_s.AF_UNIX, _s.SOCK_STREAM)
+    srv.bind(path)
+    os.chmod(path, 0o660)
+    g = group or os.getenv("SUDO_USER") or os.getenv("LLM_HOST_GUARD_ACTIONS_GROUP")
+    if g:
+        try:
+            os.chown(path, -1, grp.getgrnam(g).gr_gid)
+        except (KeyError, PermissionError):
+            pass
+    srv.listen(4)
+    srv.settimeout(1.0)
+    while not stop():
+        try:
+            conn, _ = srv.accept()
+        except _s.timeout:
+            continue
+        with conn:
+            try:
+                cq = json.loads(conn.makefile("rb").readline() or b"{}")
+                text = handle_callback(cq, runner)
+                aid = cq.get("data", "").split(":", 2)[-1]
+                kind = cq.get("data", "").split(":")[1] if cq.get("data", "").count(":") >= 2 else ""
+                kb = keyboard(aid, _load().get(aid, {}).get("applied", False)) if kind in ("fix", "undo") else None
+                conn.sendall((json.dumps({"text": text, "keyboard": kb}) + "\n").encode())
+            except Exception as e:  # noqa: BLE001
+                conn.sendall((json.dumps({"text": f"error: {e}"}) + "\n").encode())
+
+
 def poll_loop(stop, runner=run_cmds) -> None:
     """Long-poll getUpdates for our buttons. Runs in a thread; exits when stop() is true."""
     offset = 0

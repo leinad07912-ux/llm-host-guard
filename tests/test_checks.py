@@ -171,6 +171,22 @@ class Actions(unittest.TestCase):
             self.assertEqual(self.actions.handle_callback(self.cq(f"lhg:fix:{aid}", uid="999"), runner), "not authorised")
             self.assertIn("expired", self.actions.handle_callback(self.cq("lhg:fix:deadbeef"), runner))
 
+    def test_socket_roundtrip(self):
+        import json, socket, threading, time
+        path = str(Path(self.tmp.name) / "a.sock")
+        ran = []
+        with mock.patch.dict("os.environ", {"LLM_HOST_GUARD_TELEGRAM_BOT_TOKEN": "t", "LLM_HOST_GUARD_TELEGRAM_CHAT_ID": "7"}), \
+             mock.patch("os.geteuid", return_value=0):
+            aid = self.actions.register({"title": "x", "fix_cmds": ["echo hi"], "undo_cmds": ["echo undo"]})
+            stop = {"v": False}
+            th = threading.Thread(target=self.actions.serve_socket, args=(lambda: stop["v"], lambda c: (ran.extend(c), (True, ""))[1], path), daemon=True)
+            th.start(); time.sleep(0.3)
+            s = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM); s.connect(path)
+            s.sendall((json.dumps({"id": "1", "from": {"id": "7"}, "data": f"lhg:fix:{aid}"}) + "\n").encode())
+            reply = json.loads(s.makefile("rb").readline()); s.close(); stop["v"] = True
+        self.assertIn("applied", reply["text"]); self.assertEqual(ran, ["echo hi"])
+        self.assertEqual(reply["keyboard"]["inline_keyboard"][0][0]["text"], "↩ Undo")
+
     def test_needs_root(self):
         with mock.patch.dict("os.environ", {"LLM_HOST_GUARD_TELEGRAM_BOT_TOKEN": "t", "LLM_HOST_GUARD_TELEGRAM_CHAT_ID": "1"}), \
              mock.patch("os.geteuid", return_value=1000):
