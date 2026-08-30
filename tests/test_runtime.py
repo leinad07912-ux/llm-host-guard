@@ -56,8 +56,16 @@ class Run(unittest.TestCase):
         self.assertIn("'sh' (pid 102)", f[0].title)
         self.assertIn("kill -9 102", f[0].fix)
 
+    def test_vendor_outbound_is_info(self):
+        with mock.patch.object(runtime, "vendor_for_ip", side_effect=lambda ip: "ollama.com" if ip == "34.36.133.15" else None):
+            f = runtime.run(ctx(), table=BASE, outbound=lambda pids: [(100, "34.36.133.15", 443)] if 100 in pids else [])
+        info = [x for x in f if x.severity == "INFO"]
+        self.assertEqual(len(info), 1); self.assertIn("ollama.com", info[0].title); self.assertIn("none", info[0].risk)
+        self.assertFalse([x for x in f if x.severity == "HIGH"])
+
     def test_public_outbound_is_high(self):
-        f = runtime.run(ctx(), table=BASE, outbound=lambda pids: [(200, "203.208.116.5", 443)] if 200 in pids else [])
+        with mock.patch.object(runtime, "vendor_for_ip", return_value=None):
+            f = runtime.run(ctx(), table=BASE, outbound=lambda pids: [(200, "203.208.116.5", 443)] if 200 in pids else [])
         hi = [x for x in f if x.severity == "HIGH"]
         self.assertEqual(len(hi), 1)
         self.assertIn("llama.cpp server", hi[0].title)

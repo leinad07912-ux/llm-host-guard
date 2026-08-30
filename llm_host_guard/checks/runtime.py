@@ -10,7 +10,7 @@ import socket
 import struct
 from pathlib import Path
 
-from llm_host_guard.core import Ctx, Finding, is_private, sh
+from llm_host_guard.core import Ctx, Finding, is_private, sh, vendor_for_ip
 
 NAME = "runtime"
 ALWAYS_BAD = {"sh", "bash", "dash", "zsh", "fish", "curl", "wget", "nc", "ncat", "netcat", "socat",
@@ -138,12 +138,21 @@ def run(ctx: Ctx, table: dict | None = None, outbound=None) -> list[Finding]:
                                "inspect the server binary hash against a fresh download.",
                                {"server_pid": pid, "child_pid": k, "child": kcomm}))
         pub = [(p, ip, port) for p, ip, port in outbound([pid] + kids) if not is_private(ip)]
-        if pub:
-            dests = sorted({f"{ip}:{port}" for _, ip, port in pub})
-            out.append(Finding(NAME, "HIGH", f"{sig['name']} (pid {pid}) connected to public IP(s): {', '.join(dests[:5])}",
-                               "Normal only during a model pull/update. Anything else — telemetry you didn't opt into, "
-                               "or exfiltration after a compromise. In --watch mode only new destinations alert.",
-                               "If no pull is running: stop the server, note the destination, block outbound with ufw "
+        vendor = [(ip, port, vendor_for_ip(ip)) for _, ip, port in pub if vendor_for_ip(ip)]
+        unknown = [(ip, port) for _, ip, port in pub if not vendor_for_ip(ip)]
+        if vendor:
+            names = sorted({v for _, _, v in vendor})
+            out.append(Finding(NAME, "INFO", f"{sig['name']} talked to {', '.join(names)} (update check or model download)",
+                               "Expected: that is the vendor's own server.", "",
+                               {"server_pid": pid, "remotes": sorted({f"{ip}:{port}" for ip, port, _ in vendor})},
+                               risk="Risk: none — this is the software checking for updates or fetching a model."))
+        if unknown:
+            dests = sorted({f"{ip}:{port}" for ip, port in unknown})
+            out.append(Finding(NAME, "HIGH", f"{sig['name']} (pid {pid}) connected to an unrecognised internet address: {', '.join(dests[:5])}",
+                               "Not a known vendor server. Normal only if you are pulling a model from a custom source. Otherwise: "
+                               "telemetry you didn't opt into, or data leaving after a compromise. In --watch mode only new destinations alert.",
+                               "If no download is running: stop the server, note the address, block it with ufw "
                                "(`ufw deny out to <ip>`), review recently loaded models.",
-                               {"server_pid": pid, "remotes": dests}))
+                               {"server_pid": pid, "remotes": dests},
+                               risk="Risk: your AI server is sending something to a computer you don't know. Could be harmless telemetry, could be a leak."))
     return out or [Finding(NAME, "OK", f"{len(servers)} LLM server(s): children as expected, no public outbound")]

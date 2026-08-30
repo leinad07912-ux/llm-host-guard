@@ -140,8 +140,9 @@ def post_telegram(rep: dict, new: list[dict]) -> None:
     lines = [f"🛡 {rep['host']}: {len(new)} new thing(s) found — score {rep['score']}/10", ""]
     for f in new[:6]:
         lines.append(f"{icon.get(f['severity'], '•')} {word.get(f['severity'], f['severity'])}: {f['title']}")
-        if RISK_LINE.get(f["severity"]):
-            lines.append(f"   {RISK_LINE[f['severity']]}")
+        risk = f.get("risk") or RISK_LINE.get(f["severity"])
+        if risk:
+            lines.append(f"   {risk}")
         if f["fix"]:
             lines.append(f"   What to do: {f['fix'][:180]}")
         lines.append("")

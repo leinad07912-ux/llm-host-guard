@@ -12,7 +12,7 @@ import subprocess
 from dataclasses import dataclass, field, asdict
 from pathlib import Path
 
-VERSION = "0.3.4"
+VERSION = "0.3.5"
 SEVERITIES = ["CRITICAL", "HIGH", "MED", "LOW", "INFO", "OK"]
 # One-line "so what" per severity, used in Telegram/fleet messages.
 RISK_LINE = {
@@ -45,6 +45,7 @@ class Finding:
     fix_cmds: list = field(default_factory=list)   # --fix recipe, run in order as root
     undo_cmds: list = field(default_factory=list)
     fix_note: str = ""                              # why a recipe is absent / caveat shown before applying
+    risk: str = ""                                  # finding-specific plain-English risk line (overrides RISK_LINE)
 
     def key(self) -> str:
         return f"{self.check}:{self.severity}:{self.title}"
@@ -245,6 +246,24 @@ class Ctx:
             return Path(f"/proc/{pid}/cmdline").read_bytes().decode(errors="ignore").replace("\0", " ")
         except OSError:
             return sh(["ps", "-o", "command=", "-p", str(pid)]) or ""
+
+
+VENDOR_HOSTS = ["ollama.com", "registry.ollama.ai", "huggingface.co", "cdn-lfs.huggingface.co", "cas-bridge.xethub.hf.co",
+                "lmstudio.ai", "api.openai.com", "api.anthropic.com", "pypi.org", "files.pythonhosted.org", "github.com"]
+_vendor_cache: dict = {}
+
+
+def vendor_for_ip(ip: str) -> str | None:
+    """Hostname of a known LLM vendor/registry if ip belongs to one (DNS resolved once per run, best-effort)."""
+    if not _vendor_cache:
+        for h in VENDOR_HOSTS:
+            try:
+                for info in socket.getaddrinfo(h, 443, proto=socket.IPPROTO_TCP):
+                    _vendor_cache[info[4][0]] = h
+            except (socket.gaierror, OSError):
+                continue
+        _vendor_cache.setdefault("", "")
+    return _vendor_cache.get(ip)
 
 
 def form_factor() -> str:
