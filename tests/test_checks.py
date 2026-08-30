@@ -145,5 +145,32 @@ class Report(unittest.TestCase):
             self.assertNotIn("<script", t)
 
 
+class Fleet(unittest.TestCase):
+    def test_report_to_posts_with_bearer_and_host_id(self):
+        sent = {}
+        class R:
+            def read(self): return b"{}"
+        def fake_open(req, timeout=0):
+            sent["url"], sent["auth"] = req.full_url, req.get_header("Authorization")
+            sent["body"] = json.loads(req.data)
+            return R()
+        with mock.patch("urllib.request.urlopen", fake_open), \
+             mock.patch.object(g, "host_id", return_value="11111111-1111-4111-8111-111111111111"):
+            ok = g.report_to_fleet({"tool": "llm-host-guard", "score": 7}, "https://fleet.example", "lhg_abc")
+        self.assertTrue(ok)
+        self.assertEqual(sent["url"], "https://fleet.example/api/report")
+        self.assertEqual(sent["auth"], "Bearer lhg_abc")
+        self.assertEqual(sent["body"]["host_id"], "11111111-1111-4111-8111-111111111111")
+
+    def test_refuses_plain_http_offsite(self):
+        with mock.patch("urllib.request.urlopen") as u:
+            self.assertFalse(g.report_to_fleet({}, "http://fleet.example", "lhg_abc"))
+            u.assert_not_called()
+
+    def test_failure_is_swallowed(self):
+        with mock.patch("urllib.request.urlopen", side_effect=OSError("down")), mock.patch("time.sleep"):
+            self.assertFalse(g.report_to_fleet({}, "https://fleet.example", "lhg_abc"))
+
+
 if __name__ == "__main__":
     unittest.main()

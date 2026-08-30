@@ -87,6 +87,14 @@ Run `--watch 30` under systemd / launchd for continuous monitoring; `--html` in 
 
 Telegram: create a bot with @BotFather, DM it once, get your chat id from `https://api.telegram.org/bot<TOKEN>/getUpdates`, then export `LLM_HOST_GUARD_TELEGRAM_BOT_TOKEN` and `LLM_HOST_GUARD_TELEGRAM_CHAT_ID` (a systemd `EnvironmentFile=` keeps them off the command line). `examples/llm-host-guard-watch.service` is a ready user unit.
 
+## Many machines? (fleet)
+
+```
+llm-host-guard --report-to https://fleet.yourcompany.example --enrol-key lhg_…   # or env LLM_HOST_GUARD_FLEET_URL / _KEY
+```
+
+Every run also posts its JSON to a [llm-host-guard-fleet](https://github.com/leinad07912-ux/llm-host-guard-fleet) collector: one table for all hosts, history, alerts when any host goes red or silent. Best-effort — if the collector is down the local report and exit code are unchanged. Refuses plain `http://` to non-local hosts.
+
 ## `--fix` (v2)
 
 ```

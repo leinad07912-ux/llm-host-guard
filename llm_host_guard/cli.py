@@ -149,6 +149,47 @@ def post_telegram(rep: dict, new: list[dict]) -> None:
         print(f"telegram failed: {e}", file=sys.stderr)
 
 
+HOST_ID_FILE = STATE.parent / "host_id"
+
+
+def host_id() -> str:
+    """Stable per-machine uuid so a renamed host keeps its fleet history."""
+    import uuid
+    try:
+        v = HOST_ID_FILE.read_text().strip()
+        uuid.UUID(v)
+        return v
+    except (OSError, ValueError):
+        v = str(uuid.uuid4())
+        try:
+            HOST_ID_FILE.parent.mkdir(parents=True, exist_ok=True)
+            HOST_ID_FILE.write_text(v)
+        except OSError:
+            pass
+        return v
+
+
+def report_to_fleet(rep: dict, url: str, key: str, retries: int = 3) -> bool:
+    """POST the report to a fleet collector. Best-effort: never raises, never changes exit code."""
+    from urllib.parse import urlparse
+    u = urlparse(url)
+    if u.scheme != "https" and not (u.hostname in ("localhost",) or (u.hostname or "").startswith(("127.", "10.", "192.168.")) or (u.hostname or "").startswith("172.")):
+        print("fleet: refusing to send the enrol key over plain http to a non-local host", file=sys.stderr)
+        return False
+    payload = json.dumps({**rep, "host_id": host_id()}).encode()
+    endpoint = url.rstrip("/") + ("" if url.rstrip("/").endswith("/api/report") else "/api/report")
+    for i in range(retries):
+        try:
+            req = urllib.request.Request(endpoint, payload, {"Content-Type": "application/json", "Authorization": f"Bearer {key}"})
+            urllib.request.urlopen(req, timeout=15).read()
+            return True
+        except Exception as e:  # noqa: BLE001
+            if i == retries - 1:
+                print(f"fleet: report failed after {retries} tries: {e}", file=sys.stderr)
+            time.sleep(2 ** i)
+    return False
+
+
 def post_webhook(url: str, payload: dict) -> None:
     try:
         req = urllib.request.Request(url, json.dumps(payload).encode(), {"Content-Type": "application/json"})
@@ -169,6 +210,10 @@ def main(argv: list[str] | None = None) -> int:
                     help="send new findings to Telegram (watch mode); env LLM_HOST_GUARD_TELEGRAM_BOT_TOKEN + _CHAT_ID")
     ap.add_argument("--once", action="store_true", help="with --watch: single diff pass then exit (for cron)")
     ap.add_argument("--telegram-test", action="store_true", help="send a hello to your Telegram chat and exit")
+    ap.add_argument("--report-to", metavar="URL", default=os.getenv("LLM_HOST_GUARD_FLEET_URL"),
+                    help="send each report to a llm-host-guard-fleet collector (env LLM_HOST_GUARD_FLEET_URL)")
+    ap.add_argument("--enrol-key", default=os.getenv("LLM_HOST_GUARD_FLEET_KEY"),
+                    help="fleet enrol key (env LLM_HOST_GUARD_FLEET_KEY preferred — keeps it out of ps)")
     ap.add_argument("--checks", default=",".join(checks.ALL), help=f"comma list of: {','.join(checks.ALL)}")
     ap.add_argument("--model-dir", action="append", default=[], help="extra model directory to scan")
     ap.add_argument("--internet", action="store_true",
@@ -193,6 +238,11 @@ def main(argv: list[str] | None = None) -> int:
         ctx = Ctx(model_dirs=a.model_dir)
         findings = run_checks(ctx, names)
         rep = report(ctx, findings)
+        if a.report_to:
+            if a.enrol_key:
+                report_to_fleet(rep, a.report_to, a.enrol_key)
+            else:
+                print("fleet: --report-to needs --enrol-key or LLM_HOST_GUARD_FLEET_KEY", file=sys.stderr)
         if a.watch:
             new = diff_state(rep)
             if new:
