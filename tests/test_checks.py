@@ -162,6 +162,12 @@ class Fleet(unittest.TestCase):
         self.assertEqual(sent["auth"], "Bearer lhg_abc")
         self.assertEqual(sent["body"]["host_id"], "11111111-1111-4111-8111-111111111111")
 
+    def test_host_id_from_machine_id_is_stable(self):
+        with mock.patch("pathlib.Path.read_text", return_value="0123456789abcdef0123456789abcdef\n"):
+            a, b = g.host_id(), g.host_id()
+        self.assertEqual(a, b)
+        self.assertRegex(a, r"^[0-9a-f-]{36}$")
+
     def test_refuses_plain_http_offsite(self):
         with mock.patch("urllib.request.urlopen") as u:
             self.assertFalse(g.report_to_fleet({}, "http://fleet.example", "lhg_abc"))

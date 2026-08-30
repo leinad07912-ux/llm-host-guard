@@ -154,8 +154,16 @@ HOST_ID_FILE = STATE.parent / "host_id"
 
 
 def host_id() -> str:
-    """Stable per-machine uuid so a renamed host keeps its fleet history."""
+    """Stable per-machine uuid so a renamed host keeps its fleet history.
+    Linux: derived from /etc/machine-id (same for root and users). Else: a file, created once."""
     import uuid
+    for mid in ("/etc/machine-id", "/var/lib/dbus/machine-id"):
+        try:
+            v = Path(mid).read_text().strip()
+            if len(v) >= 32:
+                return str(uuid.uuid5(uuid.NAMESPACE_OID, "llm-host-guard:" + v))
+        except OSError:
+            pass
     try:
         v = HOST_ID_FILE.read_text().strip()
         uuid.UUID(v)

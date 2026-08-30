@@ -12,7 +12,7 @@ import subprocess
 from dataclasses import dataclass, field, asdict
 from pathlib import Path
 
-VERSION = "0.3.1"
+VERSION = "0.3.2"
 SEVERITIES = ["CRITICAL", "HIGH", "MED", "LOW", "INFO", "OK"]
 SEVERITY_HELP = {
     "CRITICAL": "Wide open right now. Anyone on your network (or the internet) can use or damage your LLM today. Fix first.",
