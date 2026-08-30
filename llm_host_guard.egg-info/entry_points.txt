@@ -1,2 +1,0 @@
-[console_scripts]
-llm-host-guard = llm_host_guard.cli:main
