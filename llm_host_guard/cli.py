@@ -190,7 +190,9 @@ def report_to_fleet(rep: dict, url: str, key: str, retries: int = 3) -> bool:
     for i in range(retries):
         try:
             req = urllib.request.Request(endpoint, payload, {"Content-Type": "application/json", "Authorization": f"Bearer {key}"})
-            urllib.request.urlopen(req, timeout=15).read()
+            resp = json.loads(urllib.request.urlopen(req, timeout=15).read() or b"{}")
+            if resp.get("over_limit"):
+                print(f"fleet: {resp.get('notice', 'this host is over the plan limit and is not being watched')}", file=sys.stderr)
             return True
         except Exception as e:  # noqa: BLE001
             if i == retries - 1:
