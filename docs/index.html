@@ -94,6 +94,7 @@ footer .row{display:flex;gap:1.5rem;flex-wrap:wrap}
     <a href="#checks">What it checks</a>
     <a href="#install">Install</a>
     <a href="#telegram">Telegram</a>
+    <a href="#teams">Teams</a>
     <a href="https://github.com/leinad07912-ux/llm-host-guard">GitHub</a>
   </div>
 </nav>
@@ -212,6 +213,16 @@ export LLM_HOST_GUARD_TELEGRAM_CHAT_ID=987654321</code></pre></div></div>
       <p style="margin-top:1.4rem;color:var(--muted);font-size:.95rem">Already have a bot for something else? Reuse it — the same token works for any number of tools. Prefer a webhook? <code>--webhook URL</code> posts the same JSON anywhere.</p>
     </div>
   </div>
+</section>
+
+<section id="teams">
+  <header>
+    <div class="eyebrow">many machines</div>
+    <h2>Teams: every LLM host in one table</h2>
+    <p>Add two words to the command and each machine also reports to a fleet dashboard: all hosts sorted worst-first, history per host, alerts when any of them goes red or goes quiet. Laptops are understood — they sleep, so their "gone silent" threshold is 12 hours instead of 90 minutes. Works on laptops, desktops and servers running Linux, macOS or Windows. Not phones — phone LLM apps don't open network ports, and a phone on your Wi-Fi is one of the things the guard protects your laptop <em>from</em>.</p>
+  </header>
+  <pre><code>llm-host-guard --report-to https://fleet.yourcompany.example --enrol-key lhg_…</code></pre>
+  <p style="margin-top:1rem;color:var(--muted)">Fleet is in private beta. Free for up to 3 machines when it opens. <a href="https://github.com/leinad07912-ux/llm-host-guard/issues">Ask for access</a>.</p>
 </section>
 
 <section id="not">
