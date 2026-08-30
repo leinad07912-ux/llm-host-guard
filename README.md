@@ -85,6 +85,8 @@ sudo llm-host-guard            # optional: reads ufw rules + effective sshd conf
 
 Run `--watch 30` under systemd / launchd for continuous monitoring; `--html` in watch mode keeps the report fresh.
 
+**Buttons.** When watch mode runs as root (`sudo llm-host-guard --watch 30 --telegram`), every fixable alert arrives with **🔧 Apply fix** / **✓ Ignore** buttons; after applying, **↩ Undo**. Tapping runs exactly the recipe `--fix` would and replies with the result. Only your chat id can press. Use a bot dedicated to llm-host-guard — Telegram allows one long-polling program per bot token.
+
 Telegram: create a bot with @BotFather, DM it once, get your chat id from `https://api.telegram.org/bot<TOKEN>/getUpdates`, then export `LLM_HOST_GUARD_TELEGRAM_BOT_TOKEN` and `LLM_HOST_GUARD_TELEGRAM_CHAT_ID` (a systemd `EnvironmentFile=` keeps them off the command line). `examples/llm-host-guard-watch.service` is a ready user unit.
 
 ## Many machines? (fleet)

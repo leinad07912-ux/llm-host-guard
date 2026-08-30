@@ -145,6 +145,39 @@ class Report(unittest.TestCase):
             self.assertNotIn("<script", t)
 
 
+class Actions(unittest.TestCase):
+    def setUp(self):
+        from llm_host_guard import actions
+        self.actions = actions
+        self.tmp = tempfile.TemporaryDirectory()
+        actions.ACTIONS_FILE = Path(self.tmp.name) / "actions.json"
+
+    def cq(self, data, uid="340307380"):
+        return {"id": "1", "from": {"id": uid}, "data": data, "message": {"chat": {"id": uid}, "message_id": 5, "text": "alert"}}
+
+    def test_register_keyboard_apply_undo(self):
+        ran = []
+        runner = lambda cmds: (ran.extend(cmds), (True, "done"))[1]
+        with mock.patch.dict("os.environ", {"LLM_HOST_GUARD_TELEGRAM_BOT_TOKEN": "t", "LLM_HOST_GUARD_TELEGRAM_CHAT_ID": "340307380"}), \
+             mock.patch("os.geteuid", return_value=0):
+            aid = self.actions.register({"title": "Ollama open", "fix_cmds": ["ufw allow x"], "undo_cmds": ["ufw delete allow x"]})
+            self.assertIsNone(self.actions.register({"title": "no recipe"}))
+            kb = self.actions.keyboard(aid)
+            self.assertEqual([b["text"] for b in kb["inline_keyboard"][0]], ["🔧 Apply fix", "✓ Ignore"])
+            self.assertIn("applied", self.actions.handle_callback(self.cq(f"lhg:fix:{aid}"), runner))
+            self.assertEqual(ran, ["ufw allow x"])
+            self.assertIn("undone", self.actions.handle_callback(self.cq(f"lhg:undo:{aid}"), runner))
+            self.assertEqual(ran[-1], "ufw delete allow x")
+            self.assertEqual(self.actions.handle_callback(self.cq(f"lhg:fix:{aid}", uid="999"), runner), "not authorised")
+            self.assertIn("expired", self.actions.handle_callback(self.cq("lhg:fix:deadbeef"), runner))
+
+    def test_needs_root(self):
+        with mock.patch.dict("os.environ", {"LLM_HOST_GUARD_TELEGRAM_BOT_TOKEN": "t", "LLM_HOST_GUARD_TELEGRAM_CHAT_ID": "1"}), \
+             mock.patch("os.geteuid", return_value=1000):
+            aid = self.actions.register({"title": "x", "fix_cmds": ["true"]})
+            self.assertIn("root", self.actions.handle_callback(self.cq(f"lhg:fix:{aid}", uid="1"), lambda c: (True, "")))
+
+
 class Fleet(unittest.TestCase):
     def test_report_to_posts_with_bearer_and_host_id(self):
         sent = {}

@@ -12,7 +12,7 @@ import subprocess
 from dataclasses import dataclass, field, asdict
 from pathlib import Path
 
-VERSION = "0.3.5"
+VERSION = "0.3.6"
 SEVERITIES = ["CRITICAL", "HIGH", "MED", "LOW", "INFO", "OK"]
 # One-line "so what" per severity, used in Telegram/fleet messages.
 RISK_LINE = {

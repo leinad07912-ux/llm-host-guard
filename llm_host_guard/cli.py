@@ -128,13 +128,33 @@ def diff_state(rep: dict) -> list[dict]:
     return new
 
 
-def post_telegram(rep: dict, new: list[dict]) -> None:
-    """Send new findings to a Telegram chat. Token/chat from env, never argv."""
+def post_telegram(rep: dict, new: list[dict], buttons: bool = False) -> None:
+    """Send new findings to a Telegram chat. Token/chat from env, never argv.
+    buttons=True (watch mode as root): each fixable finding is its own message with Apply/Ignore buttons."""
     token = os.getenv("LLM_HOST_GUARD_TELEGRAM_BOT_TOKEN") or os.getenv("AGENT_FIREWALL_TELEGRAM_BOT_TOKEN", "")
     chat = os.getenv("LLM_HOST_GUARD_TELEGRAM_CHAT_ID") or os.getenv("AGENT_FIREWALL_TELEGRAM_CHAT_ID", "")
     if not token or not chat:
         print("telegram: set LLM_HOST_GUARD_TELEGRAM_BOT_TOKEN and _CHAT_ID", file=sys.stderr)
         return
+    if buttons:
+        from llm_host_guard import actions
+        icon = {"CRITICAL": "🔴", "HIGH": "🟠", "MED": "🟡"}
+        word = {"CRITICAL": "Urgent", "HIGH": "Fix this week", "MED": "Tighten when convenient"}
+        rest = []
+        for f in new:
+            aid = actions.register(f)
+            if not aid:
+                rest.append(f)
+                continue
+            risk = f.get("risk") or RISK_LINE.get(f["severity"], "")
+            text = (f"{icon.get(f['severity'], '•')} {word.get(f['severity'], f['severity'])}: {f['title']}\n"
+                    + (f"   {risk}\n" if risk else "")
+                    + f"   Tap Apply to run the fix ({len(f['fix_cmds'])} command{'s' if len(f['fix_cmds']) > 1 else ''}); Undo stays available.")
+            actions.tg("sendMessage", {"chat_id": chat, "text": text[:4000], "reply_markup": actions.keyboard(aid),
+                                       "disable_web_page_preview": True})
+        new = rest
+        if not new:
+            return
     icon = {"CRITICAL": "🔴", "HIGH": "🟠", "MED": "🟡"}
     word = {"CRITICAL": "Urgent", "HIGH": "Fix this week", "MED": "Tighten when convenient", "LOW": "FYI", "INFO": "FYI", "OK": "OK"}
     lines = [f"🛡 {rep['host']}: {len(new)} new thing(s) found — score {rep['score']}/10", ""]
@@ -252,6 +272,11 @@ def main(argv: list[str] | None = None) -> int:
     if a.internet and "internet" not in names:
         names.append("internet")
 
+    tg_buttons = bool(a.watch and a.telegram and os.geteuid() == 0)
+    if tg_buttons:
+        import threading
+        from llm_host_guard import actions
+        threading.Thread(target=actions.poll_loop, args=(lambda: False,), daemon=True).start()
     while True:
         ctx = Ctx(model_dirs=a.model_dir)
         findings = run_checks(ctx, names)
@@ -270,7 +295,7 @@ def main(argv: list[str] | None = None) -> int:
                 if a.webhook:
                     post_webhook(a.webhook, {**rep, "findings": new})
                 if a.telegram:
-                    post_telegram(rep, new)
+                    post_telegram(rep, new, buttons=tg_buttons)
             else:
                 print(f"[{rep['ts']}] no change, score {rep['score']}/10", flush=True)
             if a.html:
