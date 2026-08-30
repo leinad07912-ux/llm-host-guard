@@ -12,7 +12,7 @@ import urllib.request
 from pathlib import Path
 
 import os  # noqa: E402
-from llm_host_guard.core import VERSION, SEVERITIES, SEVERITY_HELP, Ctx, Finding  # noqa: E402
+from llm_host_guard.core import VERSION, SEVERITIES, SEVERITY_HELP, Ctx, Finding, form_factor  # noqa: E402
 from llm_host_guard import checks
 
 STATE = Path.home() / ".llm-host-guard" / "state.json"
@@ -37,6 +37,7 @@ def score(findings: list[Finding]) -> int:
 
 def report(ctx: Ctx, findings: list[Finding]) -> dict:
     return {"tool": "llm-host-guard", "version": VERSION, "host": ctx.host, "os": ctx.os, "lan_ip": ctx.lan_ip,
+            "form": form_factor(),
             "ts": dt.datetime.now(dt.timezone.utc).isoformat(timespec="seconds"),
             "score": score(findings), "findings": [f.to_dict() for f in findings]}
 

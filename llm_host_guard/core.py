@@ -12,7 +12,7 @@ import subprocess
 from dataclasses import dataclass, field, asdict
 from pathlib import Path
 
-VERSION = "0.3.0"
+VERSION = "0.3.1"
 SEVERITIES = ["CRITICAL", "HIGH", "MED", "LOW", "INFO", "OK"]
 SEVERITY_HELP = {
     "CRITICAL": "Wide open right now. Anyone on your network (or the internet) can use or damage your LLM today. Fix first.",
@@ -236,6 +236,19 @@ class Ctx:
             return Path(f"/proc/{pid}/cmdline").read_bytes().decode(errors="ignore").replace("\0", " ")
         except OSError:
             return sh(["ps", "-o", "command=", "-p", str(pid)]) or ""
+
+
+def form_factor() -> str:
+    """laptop | desktop — battery presence. Fleet uses it for the silence threshold."""
+    if platform.system() == "Darwin":
+        return "laptop" if "Battery" in (sh(["pmset", "-g", "batt"]) or "") else "desktop"
+    if platform.system() == "Windows":
+        out = sh(["wmic", "path", "Win32_Battery", "get", "BatteryStatus"]) or ""
+        return "laptop" if any(ch.isdigit() for ch in out) else "desktop"
+    try:
+        return "laptop" if any(p.name.startswith("BAT") for p in Path("/sys/class/power_supply").iterdir()) else "desktop"
+    except OSError:
+        return "desktop"
 
 
 def version_tuple(v: str) -> tuple:
