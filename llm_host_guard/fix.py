@@ -2,12 +2,13 @@
 from __future__ import annotations
 
 import os
+import re
 import shlex
 import subprocess
 import sys
 from pathlib import Path
 
-from llm_host_guard.core import Ctx, Finding
+from llm_host_guard.core import Ctx, Finding, sh
 
 DROPIN_OLLAMA = Path("/etc/systemd/system/ollama.service.d/llm-host-guard.conf")
 DROPIN_SSHD = Path("/etc/ssh/sshd_config.d/00-llm-host-guard.conf")
@@ -33,6 +34,23 @@ def has_ssh_key(ctx: Ctx) -> bool:
         return p.stat().st_size > 0
     except OSError:
         return False
+
+
+_PW_LOGIN_RE = re.compile(r"Accepted password for (\S+) from (\S+)")
+
+
+def password_login_clients(days: int = 30) -> list[str]:
+    """user@ip pairs that logged in over SSH with a password recently — the access
+    paths a PasswordAuthentication-no fix would cut off (they have no enrolled key)."""
+    text = sh(["journalctl", "_COMM=sshd", "--since", f"-{days}d", "-o", "cat"]) or ""
+    if not text:
+        for p in (Path("/var/log/auth.log"), Path("/var/log/secure")):
+            try:
+                text = p.read_text(errors="ignore")
+                break
+            except OSError:
+                continue
+    return sorted({f"{u}@{ip}" for u, ip in _PW_LOGIN_RE.findall(text)})
 
 
 def sshd_reload_cmd() -> str:
@@ -63,6 +81,14 @@ def apply(ctx: Ctx, findings: list[Finding], yes: bool = False, runner=run_cmd, 
                     continue
             except EOFError:
                 out("  skipped (no tty; use --yes)")
+                continue
+        elif getattr(f, "require_confirm", False) and not dry_run:
+            try:
+                if ask("  this fix can lock out live access paths (see note) — apply anyway? [y/N] ").strip().lower() not in ("y", "yes"):
+                    out("  skipped")
+                    continue
+            except EOFError:
+                out("  skipped (needs interactive confirmation — --yes is not enough for this one)")
                 continue
         done = []
         for c in f.fix_cmds:

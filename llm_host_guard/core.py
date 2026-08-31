@@ -46,6 +46,7 @@ class Finding:
     undo_cmds: list = field(default_factory=list)
     fix_note: str = ""                              # why a recipe is absent / caveat shown before applying
     risk: str = ""                                  # finding-specific plain-English risk line (overrides RISK_LINE)
+    require_confirm: bool = False                   # fix can cut off access; prompt even under --yes
 
     def key(self) -> str:
         return f"{self.check}:{self.severity}:{self.title}"

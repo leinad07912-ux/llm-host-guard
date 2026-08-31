@@ -41,14 +41,20 @@ def _sshd(ctx: Ctx) -> list[Finding]:
     eff = sh(["sshd", "-T"]) or text  # sshd -T only as root
     if re.search(r"^\s*passwordauthentication\s+yes", eff, re.I | re.M):
         keyed = fix.has_ssh_key(ctx)
+        pw_clients = fix.password_login_clients() if keyed else []
+        note = ("keep this session open; test key login from a second terminal before closing"
+                if keyed else "no SSH authorized-keys file for the invoking user — refusing to disable passwords")
+        if pw_clients:
+            note = ("these clients logged in with a PASSWORD in the last 30 days and will be locked out: "
+                    + ", ".join(pw_clients[:8])
+                    + " — enroll each client's public key on this host first; " + note)
         out.append(Finding(NAME, "HIGH", "sshd PasswordAuthentication yes",
                            "Brute-forceable. AI-driven credential stuffing makes this worse, not better.",
                            "PasswordAuthentication no  (keep one key-based session open while testing)",
                            fix_cmds=[fix.write_file_cmd(fix.DROPIN_SSHD, "PasswordAuthentication no\n"),
                                      fix.sshd_reload_cmd()] if keyed else [],
                            undo_cmds=[fix.rm_file_cmd(fix.DROPIN_SSHD), fix.sshd_reload_cmd()] if keyed else [],
-                           fix_note="keep this session open; test key login from a second terminal before closing"
-                           if keyed else "no SSH authorized-keys file for the invoking user — refusing to disable passwords"))
+                           fix_note=note, require_confirm=bool(pw_clients)))
     if re.search(r"^\s*permitrootlogin\s+(yes|without-password|prohibit-password)", eff, re.I | re.M):
         out.append(Finding(NAME, "MED", "sshd PermitRootLogin enabled", "", "PermitRootLogin no"))
     return out

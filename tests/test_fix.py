@@ -51,6 +51,32 @@ class Apply(unittest.TestCase):
             n = fix.apply(ctx_with([]), [f], yes=False, runner=r, ask=lambda _: "n", out=lambda *a: None)
         self.assertEqual((n, r.ran), (0, []))
 
+    def test_require_confirm_prompts_even_with_yes(self):
+        f = core.Finding("x", "HIGH", "t", fix_cmds=["cmd"], require_confirm=True)
+        r = Runner()
+        with mock.patch("os.geteuid", return_value=0):
+            n = fix.apply(ctx_with([]), [f], yes=True, runner=r, ask=lambda _: "n", out=lambda *a: None)
+        self.assertEqual((n, r.ran), (0, []))
+        with mock.patch("os.geteuid", return_value=0):
+            n = fix.apply(ctx_with([]), [f], yes=True, runner=Runner(), ask=lambda _: "y", out=lambda *a: None)
+        self.assertEqual(n, 1)
+
+    def test_require_confirm_no_tty_skips(self):
+        def eof(_):
+            raise EOFError
+        f = core.Finding("x", "HIGH", "t", fix_cmds=["cmd"], require_confirm=True)
+        r = Runner()
+        with mock.patch("os.geteuid", return_value=0):
+            n = fix.apply(ctx_with([]), [f], yes=True, runner=r, ask=eof, out=lambda *a: None)
+        self.assertEqual((n, r.ran), (0, []))
+
+    def test_password_login_clients_parses_journal(self):
+        log = ("Accepted password for daniel from 192.168.50.81 port 5 ssh2\n"
+               "Accepted publickey for daniel from 192.168.50.10 port 5 ssh2\n"
+               "Accepted password for daniel from 192.168.50.81 port 6 ssh2\n")
+        with mock.patch.object(fix, "sh", return_value=log):
+            self.assertEqual(fix.password_login_clients(), ["daniel@192.168.50.81"])
+
     def test_failure_stops_recipe(self):
         r, lines = Runner(fail_on="two"), []
         f = core.Finding("x", "HIGH", "t", fix_cmds=["one", "two", "three"], undo_cmds=["u"])
@@ -91,10 +117,22 @@ class Recipes(unittest.TestCase):
                 f = [x for x in config._sshd(ctx_with([])) if "PasswordAuthentication" in x.title][0]
                 self.assertEqual(f.fix_cmds, [])
                 self.assertIn("authorized", f.fix_note)
-            with mock.patch.object(fix, "has_ssh_key", return_value=True):
+            with mock.patch.object(fix, "has_ssh_key", return_value=True), \
+                 mock.patch.object(fix, "password_login_clients", return_value=[]):
                 f = [x for x in config._sshd(ctx_with([])) if "PasswordAuthentication" in x.title][0]
                 self.assertIn("00-llm-host-guard.conf", f.fix_cmds[0])
                 self.assertIn("sshd -t", f.fix_cmds[1])
+                self.assertFalse(f.require_confirm)
+
+    def test_sshd_password_clients_force_confirm(self):
+        with mock.patch.object(config, "sh", return_value="passwordauthentication yes\n"), \
+             mock.patch.object(config, "_sshd_files_text", return_value="x"), \
+             mock.patch.object(fix, "has_ssh_key", return_value=True), \
+             mock.patch.object(fix, "password_login_clients", return_value=["dan@192.168.50.81"]):
+            f = [x for x in config._sshd(ctx_with([])) if "PasswordAuthentication" in x.title][0]
+        self.assertTrue(f.require_confirm)
+        self.assertIn("dan@192.168.50.81", f.fix_note)
+        self.assertTrue(f.fix_cmds)
 
     def test_ollama_dropin_only_when_unscoped_and_systemd(self):
         c = ctx_with([core.Listener("tcp", "*", 11434, "ollama", 1)])

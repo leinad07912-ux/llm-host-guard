@@ -147,8 +147,10 @@ def post_telegram(rep: dict, new: list[dict], buttons: bool = False) -> None:
                 rest.append(f)
                 continue
             risk = f.get("risk") or RISK_LINE.get(f["severity"], "")
+            note = f.get("fix_note", "")
             text = (f"{icon.get(f['severity'], '•')} {word.get(f['severity'], f['severity'])}: {f['title']}\n"
                     + (f"   {risk}\n" if risk else "")
+                    + (f"   ⚠️ {note}\n" if note and f.get("require_confirm") else "")
                     + f"   Tap Apply to run the fix ({len(f['fix_cmds'])} command{'s' if len(f['fix_cmds']) > 1 else ''}); Undo stays available.")
             actions.tg("sendMessage", {"chat_id": chat, "text": text[:4000], "reply_markup": actions.keyboard(aid),
                                        "disable_web_page_preview": True})
