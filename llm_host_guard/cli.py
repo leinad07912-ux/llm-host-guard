@@ -285,13 +285,16 @@ def main(argv: list[str] | None = None) -> int:
         # LLM_HOST_GUARD_TELEGRAM_SHARED=1: another program owns getUpdates for this bot and forwards taps to our socket
         target = actions.serve_socket if os.getenv("LLM_HOST_GUARD_TELEGRAM_SHARED") == "1" else actions.poll_loop
         threading.Thread(target=target, args=(lambda: False,), daemon=True).start()
+    from llm_host_guard import actions
     while True:
         ctx = Ctx(model_dirs=a.model_dir)
         findings = run_checks(ctx, names)
         rep = report(ctx, findings)
         if a.report_to:
             if a.enrol_key:
-                report_to_fleet(rep, a.report_to, a.enrol_key)
+                acts = actions.pending_actions()
+                if report_to_fleet({**rep, "actions": acts} if acts else rep, a.report_to, a.enrol_key) and acts:
+                    actions.clear_actions(len(acts))
             else:
                 print("fleet: --report-to needs --enrol-key or LLM_HOST_GUARD_FLEET_KEY", file=sys.stderr)
         if a.watch:
@@ -312,7 +315,8 @@ def main(argv: list[str] | None = None) -> int:
                 write_html(rep, Path(a.html))
             if a.once:
                 return 0
-            time.sleep(a.watch * 60)
+            actions.WAKE.wait(a.watch * 60)  # a button tap that changed the host wakes us early
+            actions.WAKE.clear()
             continue
         if a.json:
             print(json.dumps(rep, indent=2))

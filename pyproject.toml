@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "llm-host-guard"
-version = "0.4.1"
+version = "0.4.2"
 description = "Audit the attack surface of a machine running local LLMs (Ollama, LM Studio, vLLM, llama.cpp...). Stdlib only."
 readme = "README.md"
 license = {text = "MIT"}

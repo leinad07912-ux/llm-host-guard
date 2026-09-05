@@ -10,12 +10,15 @@ import os
 import secrets
 import subprocess
 import sys
+import threading
 import time
 import urllib.request
 from pathlib import Path
 
 ACTIONS_FILE = Path.home() / ".llm-host-guard" / "actions.json"
 SNOOZE_FILE = Path.home() / ".llm-host-guard" / "snooze.json"
+ACTION_LOG = Path.home() / ".llm-host-guard" / "actions.jsonl"   # what was tapped, shipped to the fleet collector
+WAKE = threading.Event()  # set after a tap changed the host, so the watch loop re-audits now instead of in 30 min
 MAX_AGE_S = 7 * 24 * 3600
 SNOOZE_S = 24 * 3600
 TEMP_CLOSE_S = 3600
@@ -116,6 +119,42 @@ def snoozed_due(now: float | None = None) -> set[str]:
     return due
 
 
+def log_action(what: str, title: str, ok: bool = True, wake: bool = False) -> None:
+    """Append one line to the action log (best effort) and optionally wake the watch loop."""
+    try:
+        ACTION_LOG.parent.mkdir(parents=True, exist_ok=True)
+        with ACTION_LOG.open("a") as fh:
+            fh.write(json.dumps({"ts": time.strftime("%Y-%m-%dT%H:%M:%S+00:00", time.gmtime()), "what": what, "title": title, "ok": ok}) + "\n")
+    except OSError:
+        pass
+    if wake:
+        WAKE.set()
+
+
+def pending_actions(limit: int = 50) -> list[dict]:
+    """Unshipped action-log lines, oldest first."""
+    try:
+        lines = ACTION_LOG.read_text().splitlines()
+    except OSError:
+        return []
+    out = []
+    for ln in lines[:limit]:
+        try:
+            out.append(json.loads(ln))
+        except ValueError:
+            pass
+    return out
+
+
+def clear_actions(n: int) -> None:
+    """Drop the first n lines after the collector accepted them."""
+    try:
+        lines = ACTION_LOG.read_text().splitlines()
+        ACTION_LOG.write_text("".join(ln + "\n" for ln in lines[n:]))
+    except OSError:
+        pass
+
+
 def expire_temp(runner=None, now: float | None = None) -> list[str]:
     """Reopen anything closed with 'Close for 1h' whose hour is up. Returns messages sent. Call every watch pass."""
     runner = runner or run_cmds
@@ -128,6 +167,7 @@ def expire_temp(runner=None, now: float | None = None) -> list[str]:
             a["applied"] = not ok
             a.pop("reopen_at", None)
             out.append(f"⏰ hour is up — reopened: {a['title']}" if ok else f"❌ could not reopen {a['title']}: {msg}")
+            log_action("reopened after 1h", a["title"], ok)
     if out:
         _save(d)
         _, chat = _creds()
@@ -158,9 +198,11 @@ def handle_callback(cq: dict, runner=run_cmds) -> str:
     if not a:
         return "this button has expired"
     if kind == "ok":
+        log_action("left as is", a["title"])
         return f"left as is: {a['title']}"
     if kind == "snz":
         snooze(a.get("keys", []))
+        log_action("snoozed 24h", a["title"])
         return f"⏰ will remind you tomorrow: {a['title']}"
     if not a.get("fix"):
         return "nothing to run for this one"
@@ -172,6 +214,7 @@ def handle_callback(cq: dict, runner=run_cmds) -> str:
         if kind == "tmp" and ok:
             a["reopen_at"] = time.time() + TEMP_CLOSE_S
         _save(d)
+        log_action("closed for 1h" if kind == "tmp" else "closed", a["title"], ok, wake=ok)
         if not ok:
             return f"❌ {msg}"
         when = " — reopens in 1h, while the watch service is running" if kind == "tmp" else ""
@@ -180,6 +223,7 @@ def handle_callback(cq: dict, runner=run_cmds) -> str:
         ok, msg = runner(a["undo"]) if a["undo"] else (False, "no undo for this one")
         a["applied"] = not ok
         _save(d)
+        log_action("reopened (undo)", a["title"], ok, wake=ok)
         return f"↩ undone: {a['title']}" if ok else f"❌ {msg}"
     return ""
 

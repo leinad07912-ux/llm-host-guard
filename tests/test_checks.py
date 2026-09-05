@@ -162,6 +162,7 @@ class Actions(unittest.TestCase):
         self.tmp = tempfile.TemporaryDirectory()
         actions.ACTIONS_FILE = Path(self.tmp.name) / "actions.json"
         actions.SNOOZE_FILE = Path(self.tmp.name) / "snooze.json"
+        actions.ACTION_LOG = Path(self.tmp.name) / "actions.jsonl"
 
     def cq(self, data, uid="340307380"):
         return {"id": "1", "from": {"id": uid}, "data": data, "message": {"chat": {"id": uid}, "message_id": 5, "text": "alert"}}
@@ -205,6 +206,12 @@ class Actions(unittest.TestCase):
             self.assertEqual(ran[-1], "ufw delete allow x")
             self.assertEqual(self.actions.expire_temp(runner, now=time.time() + 7200), [])  # not twice
             self.assertFalse(self.actions._load()[aid]["applied"])
+            # every tap was logged; closing woke the watch loop; shipping clears the log
+            log = self.actions.pending_actions()
+            self.assertEqual([e["what"] for e in log], ["snoozed 24h", "closed for 1h", "reopened after 1h"])
+            self.assertTrue(self.actions.WAKE.is_set())
+            self.actions.clear_actions(2)
+            self.assertEqual([e["what"] for e in self.actions.pending_actions()], ["reopened after 1h"])
 
     def test_socket_roundtrip(self):
         import json, socket, threading, time
