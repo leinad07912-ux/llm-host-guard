@@ -32,6 +32,12 @@ def probe(host: str, port: int, paths: list[str], timeout: float = 2.0) -> dict:
     return hits
 
 
+def _single_host(src: str) -> bool:
+    """ufw source is one address (bare IP or /32, /128)."""
+    ip, _, plen = src.partition("/")
+    return not plen or plen in ("32", "128")
+
+
 def run(ctx: Ctx) -> list[Finding]:
     out = []
     seen = set()
@@ -45,7 +51,12 @@ def run(ctx: Ctx) -> list[Finding]:
         hits = probe(ctx.lan_ip, l.port, sig.get("probe", [])) if sig.get("probe") else {}
         models = max((h.get("models", 0) for h in hits.values()), default=0)
         srcs = [x for x in ctx.ufw_sources(l.port) if x != "Anywhere"]
-        if hits and srcs:
+        if hits and srcs and all(_single_host(x) for x in srcs):
+            # already pinned to specific client(s): nothing left to tighten, no alert
+            out.append(Finding(NAME, "LOW", f"{sig['name']} on {l.addr}:{l.port} open without auth, ufw-scoped to {', '.join(srcs)}",
+                               "Reachable only from the listed host(s). Fine as long as you trust them.", "",
+                               {"port": l.port, "addr": l.addr, "proc": l.proc, "ufw_sources": srcs}))
+        elif hits and srcs:
             out.append(Finding(
                 NAME, "MED",
                 f"{sig['name']} on {l.addr}:{l.port} open without auth, ufw-scoped to {', '.join(srcs)}",

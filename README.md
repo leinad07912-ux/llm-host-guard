@@ -85,7 +85,7 @@ sudo llm-host-guard            # optional: reads ufw rules + effective sshd conf
 
 Run `--watch 30` under systemd / launchd for continuous monitoring; `--html` in watch mode keeps the report fresh.
 
-**Buttons.** When watch mode runs as root (`sudo llm-host-guard --watch 30 --telegram`), every fixable alert arrives with **🔧 Apply fix** / **✓ Ignore** buttons; after applying, **↩ Undo**. Tapping runs exactly the recipe `--fix` would and replies with the result. Only your chat id can press. Use a bot dedicated to llm-host-guard — Telegram allows one long-polling program per bot token.
+**Buttons.** When watch mode runs as root (`sudo llm-host-guard --watch 30 --telegram`), every fixable alert arrives with **🔒 Close it** / **🔒 Close for 1h** / **⏰ Remind me tomorrow** / **✓ Leave it**; after closing, **↩ Undo (reopen)**. Close runs exactly the recipe `--fix` would and replies with the result. Close for 1h runs the same recipe and undoes it an hour later (the reopen is done by the watch service, so it needs to stay running). Remind me tomorrow hides the finding for 24h, then it alerts once more. Alerts with no recipe get just Remind / Leave it. Only your chat id can press. Use a bot dedicated to llm-host-guard — Telegram allows one long-polling program per bot token.
 
 Telegram: create a bot with @BotFather, DM it once, get your chat id from `https://api.telegram.org/bot<TOKEN>/getUpdates`, then export `LLM_HOST_GUARD_TELEGRAM_BOT_TOKEN` and `LLM_HOST_GUARD_TELEGRAM_CHAT_ID` (a systemd `EnvironmentFile=` keeps them off the command line). `examples/llm-host-guard-watch.service` is a ready user unit.
 

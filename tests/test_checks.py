@@ -3,6 +3,7 @@ import json
 import struct
 import sys
 import tempfile
+import time
 import unittest
 from pathlib import Path
 from unittest import mock
@@ -94,6 +95,15 @@ class Scoping(unittest.TestCase):
         self.assertEqual(f.severity, "MED")
         self.assertEqual(f.evidence["ufw_sources"], ["192.168.50.0/24"])
 
+    def test_ufw_single_host_is_low(self):
+        c = ctx_with(core.parse_ss(SS))
+        c._ufw = "11434/tcp                  ALLOW       192.168.50.47              # Ollama for HA\n"
+        with mock.patch.object(ports, "probe", return_value={"/api/tags": {"status": 200, "models": 2}}):
+            f = ports.run(c)[0]
+        self.assertEqual(f.severity, "LOW")
+        self.assertTrue(all(ports._single_host(x) for x in ("10.0.0.1", "10.0.0.1/32", "fd00::1/128")))
+        self.assertFalse(ports._single_host("10.0.0.0/24"))
+
     def test_docker_user_drop_downgrades(self):
         c = ctx_with([])
         c._docker_user = "-A DOCKER-USER -i wlp98s0 -p tcp -m multiport --dports 54321:54327 -j DROP\n-A DOCKER-USER -i wlp98s0 -p tcp --dport 11235 -j DROP\n"
@@ -151,6 +161,7 @@ class Actions(unittest.TestCase):
         self.actions = actions
         self.tmp = tempfile.TemporaryDirectory()
         actions.ACTIONS_FILE = Path(self.tmp.name) / "actions.json"
+        actions.SNOOZE_FILE = Path(self.tmp.name) / "snooze.json"
 
     def cq(self, data, uid="340307380"):
         return {"id": "1", "from": {"id": uid}, "data": data, "message": {"chat": {"id": uid}, "message_id": 5, "text": "alert"}}
@@ -163,13 +174,37 @@ class Actions(unittest.TestCase):
             aid = self.actions.register({"title": "Ollama open", "fix_cmds": ["ufw allow x"], "undo_cmds": ["ufw delete allow x"]})
             self.assertIsNone(self.actions.register({"title": "no recipe"}))
             kb = self.actions.keyboard(aid)
-            self.assertEqual([b["text"] for b in kb["inline_keyboard"][0]], ["🔧 Apply fix", "✓ Ignore"])
-            self.assertIn("applied", self.actions.handle_callback(self.cq(f"lhg:fix:{aid}"), runner))
+            self.assertEqual([b["text"] for b in kb["inline_keyboard"][0]], ["🔒 Close it", "🔒 Close for 1h"])
+            self.assertIn("closed", self.actions.handle_callback(self.cq(f"lhg:fix:{aid}"), runner))
             self.assertEqual(ran, ["ufw allow x"])
             self.assertIn("undone", self.actions.handle_callback(self.cq(f"lhg:undo:{aid}"), runner))
             self.assertEqual(ran[-1], "ufw delete allow x")
             self.assertEqual(self.actions.handle_callback(self.cq(f"lhg:fix:{aid}", uid="999"), runner), "not authorised")
             self.assertIn("expired", self.actions.handle_callback(self.cq("lhg:fix:deadbeef"), runner))
+
+    def test_snooze_and_temp_close(self):
+        ran = []
+        runner = lambda cmds: (ran.extend(cmds), (True, "done"))[1]
+        f = {"check": "ports", "severity": "MED", "title": "Ollama scoped", "fix_cmds": ["ufw allow x"], "undo_cmds": ["ufw delete allow x"]}
+        with mock.patch.dict("os.environ", {"LLM_HOST_GUARD_TELEGRAM_BOT_TOKEN": "t", "LLM_HOST_GUARD_TELEGRAM_CHAT_ID": "1"}), \
+             mock.patch("os.geteuid", return_value=0), mock.patch.object(self.actions, "tg", return_value={}):
+            # snooze via summary keyboard: key hidden until 24h passes, then due exactly once
+            sid = self.actions.register_summary([f])
+            self.assertEqual([b["text"] for b in self.actions.keyboard(sid, summary=True)["inline_keyboard"][0]], ["⏰ Remind me tomorrow", "✓ Leave it"])
+            self.assertIn("tomorrow", self.actions.handle_callback(self.cq(f"lhg:snz:{sid}", uid="1"), runner))
+            self.assertEqual(self.actions.snoozed_due(), set())
+            self.assertEqual(self.actions.snoozed_due(now=time.time() + 25 * 3600), {"ports:MED:Ollama scoped"})
+            self.assertEqual(self.actions.snoozed_due(now=time.time() + 25 * 3600), set())
+            # temp close: fix runs now, undo runs once the hour is up
+            aid = self.actions.register(f)
+            self.assertIn("reopens in 1h", self.actions.handle_callback(self.cq(f"lhg:tmp:{aid}", uid="1"), runner))
+            self.assertEqual(ran, ["ufw allow x"])
+            self.assertEqual(self.actions.expire_temp(runner), [])
+            msgs = self.actions.expire_temp(runner, now=time.time() + 3601)
+            self.assertEqual(len(msgs), 1); self.assertIn("reopened", msgs[0])
+            self.assertEqual(ran[-1], "ufw delete allow x")
+            self.assertEqual(self.actions.expire_temp(runner, now=time.time() + 7200), [])  # not twice
+            self.assertFalse(self.actions._load()[aid]["applied"])
 
     def test_socket_roundtrip(self):
         import json, socket, threading, time
@@ -184,8 +219,8 @@ class Actions(unittest.TestCase):
             s = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM); s.connect(path)
             s.sendall((json.dumps({"id": "1", "from": {"id": "7"}, "data": f"lhg:fix:{aid}"}) + "\n").encode())
             reply = json.loads(s.makefile("rb").readline()); s.close(); stop["v"] = True
-        self.assertIn("applied", reply["text"]); self.assertEqual(ran, ["echo hi"])
-        self.assertEqual(reply["keyboard"]["inline_keyboard"][0][0]["text"], "↩ Undo")
+        self.assertIn("closed", reply["text"]); self.assertEqual(ran, ["echo hi"])
+        self.assertEqual(reply["keyboard"]["inline_keyboard"][0][0]["text"], "↩ Undo (reopen)")
 
     def test_needs_root(self):
         with mock.patch.dict("os.environ", {"LLM_HOST_GUARD_TELEGRAM_BOT_TOKEN": "t", "LLM_HOST_GUARD_TELEGRAM_CHAT_ID": "1"}), \

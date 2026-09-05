@@ -1,4 +1,4 @@
-"""Telegram action buttons for --watch --telegram: Apply fix / Ignore / Undo, executed as root on tap.
+"""Telegram action buttons for --watch --telegram: Close it / Close for 1h / Remind me tomorrow / Leave it / Undo, run as root on tap.
 
 Only the configured chat id may press. Actions are never free-form: a button maps to the finding's own
 fix_cmds/undo_cmds (the same recipes --fix runs). Pending actions live in the watch state file.
@@ -15,7 +15,10 @@ import urllib.request
 from pathlib import Path
 
 ACTIONS_FILE = Path.home() / ".llm-host-guard" / "actions.json"
+SNOOZE_FILE = Path.home() / ".llm-host-guard" / "snooze.json"
 MAX_AGE_S = 7 * 24 * 3600
+SNOOZE_S = 24 * 3600
+TEMP_CLOSE_S = 3600
 
 
 def _creds() -> tuple[str, str]:
@@ -48,25 +51,89 @@ def _save(d: dict) -> None:
     ACTIONS_FILE.write_text(json.dumps(d))
 
 
-def register(finding: dict) -> str | None:
-    """Store a finding's recipe; return a short id for callback_data, or None if it has no recipe."""
-    if not finding.get("fix_cmds"):
-        return None
+def finding_key(f: dict) -> str:
+    return f"{f.get('check', '?')}:{f.get('severity', '?')}:{f['title']}"
+
+
+def _put(entry: dict) -> str:
     d = _load()
     aid = secrets.token_hex(4)
-    d[aid] = {"title": finding["title"], "fix": finding["fix_cmds"], "undo": finding.get("undo_cmds", []),
-              "note": finding.get("fix_note", ""), "ts": time.time(), "applied": False}
+    d[aid] = {**entry, "ts": time.time()}
     _save(d)
     return aid
 
 
-def keyboard(aid: str | None, applied: bool = False) -> dict | None:
+def register(finding: dict) -> str | None:
+    """Store a finding's recipe; return a short id for callback_data, or None if it has no recipe."""
+    if not finding.get("fix_cmds"):
+        return None
+    return _put({"title": finding["title"], "fix": finding["fix_cmds"], "undo": finding.get("undo_cmds", []),
+                 "note": finding.get("fix_note", ""), "applied": False, "keys": [finding_key(finding)]})
+
+
+def register_summary(findings: list[dict]) -> str | None:
+    """Buttons for a batch of findings without a recipe: snooze / leave it."""
+    if not findings:
+        return None
+    return _put({"title": f"{len(findings)} finding(s)", "keys": [finding_key(f) for f in findings]})
+
+
+def keyboard(aid: str | None, applied: bool = False, summary: bool = False) -> dict | None:
     if not aid:
         return None
+    snooze = {"text": "⏰ Remind me tomorrow", "callback_data": f"lhg:snz:{aid}"}
+    if summary:
+        return {"inline_keyboard": [[snooze, {"text": "✓ Leave it", "callback_data": f"lhg:ok:{aid}"}]]}
     if applied:
-        return {"inline_keyboard": [[{"text": "↩ Undo", "callback_data": f"lhg:undo:{aid}"}]]}
-    return {"inline_keyboard": [[{"text": "🔧 Apply fix", "callback_data": f"lhg:fix:{aid}"},
-                                 {"text": "✓ Ignore", "callback_data": f"lhg:ok:{aid}"}]]}
+        return {"inline_keyboard": [[{"text": "↩ Undo (reopen)", "callback_data": f"lhg:undo:{aid}"}]]}
+    return {"inline_keyboard": [[{"text": "🔒 Close it", "callback_data": f"lhg:fix:{aid}"},
+                                 {"text": "🔒 Close for 1h", "callback_data": f"lhg:tmp:{aid}"}],
+                                [snooze, {"text": "✓ Leave it", "callback_data": f"lhg:ok:{aid}"}]]}
+
+
+def _snooze_load() -> dict:
+    try:
+        return json.loads(SNOOZE_FILE.read_text())
+    except (OSError, ValueError):
+        return {}
+
+
+def snooze(keys: list[str], seconds: int = SNOOZE_S) -> None:
+    d = _snooze_load()
+    until = time.time() + seconds
+    d.update({k: until for k in keys})
+    SNOOZE_FILE.parent.mkdir(parents=True, exist_ok=True)
+    SNOOZE_FILE.write_text(json.dumps(d))
+
+
+def snoozed_due(now: float | None = None) -> set[str]:
+    """Keys whose snooze expired; they are dropped from the file so they alert again once."""
+    d = _snooze_load()
+    now = now or time.time()
+    due = {k for k, t in d.items() if t <= now}
+    if due:
+        SNOOZE_FILE.write_text(json.dumps({k: t for k, t in d.items() if k not in due}))
+    return due
+
+
+def expire_temp(runner=None, now: float | None = None) -> list[str]:
+    """Reopen anything closed with 'Close for 1h' whose hour is up. Returns messages sent. Call every watch pass."""
+    runner = runner or run_cmds
+    d = _load()
+    now = now or time.time()
+    out = []
+    for a in d.values():
+        if a.get("applied") and a.get("reopen_at") and a["reopen_at"] <= now:
+            ok, msg = runner(a["undo"]) if a["undo"] else (False, "no undo for this one")
+            a["applied"] = not ok
+            a.pop("reopen_at", None)
+            out.append(f"⏰ hour is up — reopened: {a['title']}" if ok else f"❌ could not reopen {a['title']}: {msg}")
+    if out:
+        _save(d)
+        _, chat = _creds()
+        for t in out:
+            tg("sendMessage", {"chat_id": chat, "text": t})
+    return out
 
 
 def run_cmds(cmds: list[str]) -> tuple[bool, str]:
@@ -91,14 +158,24 @@ def handle_callback(cq: dict, runner=run_cmds) -> str:
     if not a:
         return "this button has expired"
     if kind == "ok":
-        return f"ignored: {a['title']}"
+        return f"left as is: {a['title']}"
+    if kind == "snz":
+        snooze(a.get("keys", []))
+        return f"⏰ will remind you tomorrow: {a['title']}"
+    if not a.get("fix"):
+        return "nothing to run for this one"
     if os.geteuid() != 0:
         return "the watch service isn't running as root, so it can't apply fixes — run it with sudo"
-    if kind == "fix":
+    if kind in ("fix", "tmp"):
         ok, msg = runner(a["fix"])
         a["applied"] = ok
+        if kind == "tmp" and ok:
+            a["reopen_at"] = time.time() + TEMP_CLOSE_S
         _save(d)
-        return (f"✅ applied: {a['title']}" + (f"\n{a['note']}" if a["note"] else "")) if ok else f"❌ {msg}"
+        if not ok:
+            return f"❌ {msg}"
+        when = " — reopens in 1h, while the watch service is running" if kind == "tmp" else ""
+        return f"✅ closed: {a['title']}{when}" + (f"\n{a['note']}" if a["note"] else "")
     if kind == "undo":
         ok, msg = runner(a["undo"]) if a["undo"] else (False, "no undo for this one")
         a["applied"] = not ok
@@ -141,7 +218,7 @@ def serve_socket(stop, runner=run_cmds, path: str = SOCKET_PATH, group: str | No
                 text = handle_callback(cq, runner)
                 aid = cq.get("data", "").split(":", 2)[-1]
                 kind = cq.get("data", "").split(":")[1] if cq.get("data", "").count(":") >= 2 else ""
-                kb = keyboard(aid, _load().get(aid, {}).get("applied", False)) if kind in ("fix", "undo") else None
+                kb = keyboard(aid, _load().get(aid, {}).get("applied", False)) if kind in ("fix", "tmp", "undo") else None
                 conn.sendall((json.dumps({"text": text, "keyboard": kb}) + "\n").encode())
             except Exception as e:  # noqa: BLE001
                 conn.sendall((json.dumps({"text": f"error: {e}"}) + "\n").encode())
@@ -163,7 +240,7 @@ def poll_loop(stop, runner=run_cmds) -> None:
                 msg = cq["message"]
                 aid = cq["data"].split(":", 2)[-1]
                 applied = _load().get(aid, {}).get("applied", False)
-                kb = keyboard(aid, applied) if cq["data"].split(":")[1] != "ok" else None
+                kb = keyboard(aid, applied) if cq["data"].split(":")[1] not in ("ok", "snz") else None
                 tg("editMessageText", {"chat_id": msg["chat"]["id"], "message_id": msg["message_id"],
                                        "text": msg.get("text", "")[:3800] + f"\n\n→ {text}",
                                        "reply_markup": kb or {"inline_keyboard": []}})

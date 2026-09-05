@@ -121,7 +121,9 @@ def diff_state(rep: dict) -> list[dict]:
             prev = set(json.loads(STATE.read_text()).get("keys", []))
         except (OSError, ValueError):
             pass
-    keys = [f"{f['check']}:{f['severity']}:{f['title']}" for f in rep["findings"]]
+    from llm_host_guard import actions
+    prev -= actions.snoozed_due()  # "remind me tomorrow" expired: alert again
+    keys = [actions.finding_key(f) for f in rep["findings"]]
     new = [f for f, k in zip(rep["findings"], keys) if k not in prev and f["severity"] in WEIGHT]
     STATE.parent.mkdir(parents=True, exist_ok=True)
     STATE.write_text(json.dumps({"ts": rep["ts"], "keys": keys}))
@@ -151,7 +153,7 @@ def post_telegram(rep: dict, new: list[dict], buttons: bool = False) -> None:
             text = (f"{icon.get(f['severity'], '•')} {word.get(f['severity'], f['severity'])}: {f['title']}\n"
                     + (f"   {risk}\n" if risk else "")
                     + (f"   ⚠️ {note}\n" if note and f.get("require_confirm") else "")
-                    + f"   Tap Apply to run the fix ({len(f['fix_cmds'])} command{'s' if len(f['fix_cmds']) > 1 else ''}); Undo stays available.")
+                    + f"   Close it runs the fix ({len(f['fix_cmds'])} command{'s' if len(f['fix_cmds']) > 1 else ''}); Undo stays available. Close for 1h reopens on its own.")
             actions.tg("sendMessage", {"chat_id": chat, "text": text[:4000], "reply_markup": actions.keyboard(aid),
                                        "disable_web_page_preview": True})
         new = rest
@@ -171,6 +173,8 @@ def post_telegram(rep: dict, new: list[dict], buttons: bool = False) -> None:
     if len(new) > 6:
         lines.append(f"…and {len(new) - 6} more in the report.")
     body = {"chat_id": chat, "text": "\n".join(lines)[:4000], "disable_web_page_preview": True}
+    if buttons:
+        body["reply_markup"] = actions.keyboard(actions.register_summary(new), summary=True)
     try:
         req = urllib.request.Request(f"https://api.telegram.org/bot{token}/sendMessage",
                                      json.dumps(body).encode(), {"Content-Type": "application/json"})
@@ -291,6 +295,8 @@ def main(argv: list[str] | None = None) -> int:
             else:
                 print("fleet: --report-to needs --enrol-key or LLM_HOST_GUARD_FLEET_KEY", file=sys.stderr)
         if a.watch:
+            if tg_buttons:
+                actions.expire_temp()
             new = diff_state(rep)
             if new:
                 print(f"[{rep['ts']}] {len(new)} new finding(s):")
