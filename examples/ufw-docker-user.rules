@@ -1,9 +1,18 @@
 
 # llm-host-guard: keep dev containers off the LAN (Docker bypasses ufw INPUT).
-# Append to /etc/ufw/after.rules, adjust interface + ports, then `sudo ufw reload`.
+# Append to /etc/ufw/after.rules, adjust interfaces + ports, then `sudo ufw reload`.
+#
+# Two things that are easy to get wrong:
+#  1. Docker rewrites the destination port BEFORE this chain runs (published 54322 -> container 5432), so a plain
+#     `--dport 54322` rule matches nothing unless the container listens on the same number. Match the port the
+#     client dialled with `-m conntrack --ctorigdstport` instead.
+#  2. Add the rule for EVERY interface that faces a network (e.g. both Ethernet and Wi-Fi): `ip -br addr`.
+# Then test from ANOTHER device (PowerShell: Test-NetConnection <ip> -Port <port>); testing on the host proves nothing.
 *filter
 :DOCKER-USER - [0:0]
--A DOCKER-USER -i wlp98s0 -p tcp -m multiport --dports 54321:54327 -j DROP
--A DOCKER-USER -i wlp98s0 -p tcp --dport 11235 -j DROP
+-A DOCKER-USER -i enp100s0 -p tcp -m conntrack --ctorigdstport 54321:54327 --ctdir ORIGINAL -j DROP
+-A DOCKER-USER -i wlp98s0 -p tcp -m conntrack --ctorigdstport 54321:54327 --ctdir ORIGINAL -j DROP
+-A DOCKER-USER -i enp100s0 -p tcp -m conntrack --ctorigdstport 11235 --ctdir ORIGINAL -j DROP
+-A DOCKER-USER -i wlp98s0 -p tcp -m conntrack --ctorigdstport 11235 --ctdir ORIGINAL -j DROP
 -A DOCKER-USER -j RETURN
 COMMIT

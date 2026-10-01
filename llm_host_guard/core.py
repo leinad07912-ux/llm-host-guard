@@ -161,6 +161,72 @@ def listeners() -> list[Listener]:
     return []
 
 
+# ---- DOCKER-USER rule parsing ------------------------------------------------------------------------
+# Docker translates a published port (host 54322 -> container 5432) BEFORE the DOCKER-USER chain runs, so
+# the chain sees the container's port. A rule on the published port only matches when both are equal; to
+# match what a client dialled use `-m conntrack --ctorigdstport`. Rules are credited only when they are
+# unconditional apart from interface, protocol and port; anything else (source/destination matches,
+# negations, unknown options) is ignored rather than assumed to protect the port.
+_RULE_OPTS = {"-A", "-i", "-p", "-m", "-j", "--dport", "--dports", "--ctorigdstport", "--ctdir", "--reject-with"}
+
+
+@dataclass
+class DropRule:
+    iface: str | None                      # -i value; None = every interface
+    proto: str | None                      # -p value; None = any
+    dports: list = field(default_factory=list)       # [(lo, hi)] port the chain sees (container side)
+    orig_dports: list = field(default_factory=list)  # [(lo, hi)] --ctorigdstport: port the client dialled
+
+
+def _port_ranges(spec: str) -> list[tuple[int, int]]:
+    out = []
+    for part in spec.split(","):
+        lo, _, hi = part.partition(":")
+        if lo.isdigit():
+            out.append((int(lo), int(hi) if hi.isdigit() else int(lo)))
+    return out
+
+
+def parse_drop_rules(text: str) -> list[DropRule]:
+    """DROP/REJECT rules from `iptables -S DOCKER-USER` that can be credited, in order. Parsing stops at the
+    first ACCEPT/RETURN: packets that rule passes never reach the later drops."""
+    rules = []
+    for line in text.splitlines():
+        t = line.split()
+        if len(t) < 2 or t[0] != "-A" or "-j" not in t:
+            continue
+        j = t.index("-j")
+        target = t[j + 1] if j + 1 < len(t) else ""
+        if target in ("ACCEPT", "RETURN"):
+            break
+        if target not in ("DROP", "REJECT"):
+            continue
+        if "!" in t or any(o.startswith("-") and o not in _RULE_OPTS for o in t):
+            continue
+
+        def val(opt: str) -> str | None:
+            return t[t.index(opt) + 1] if opt in t and t.index(opt) + 1 < len(t) else None
+        d = (val("--dports") or val("--dport") or "")
+        rules.append(DropRule(val("-i"), val("-p"), _port_ranges(d), _port_ranges(val("--ctorigdstport") or "")))
+    return rules
+
+
+def _in_ranges(ranges: list, port: int) -> bool:
+    return any(lo <= port <= hi for lo, hi in ranges)
+
+
+def rule_covers(rule: DropRule, host_port: int, container_port: int, proto: str = "tcp") -> bool:
+    """Does this rule drop a connection to published `host_port` (container listening on `container_port`)?"""
+    if rule.proto not in (None, proto):
+        return False
+    ok = True
+    if rule.orig_dports:
+        ok = ok and _in_ranges(rule.orig_dports, host_port)
+    if rule.dports:
+        ok = ok and _in_ranges(rule.dports, container_port)
+    return ok  # no port match at all = the whole interface is dropped
+
+
 class Ctx:
     """Lazily-computed system facts shared across checks."""
 
@@ -201,6 +267,7 @@ class Ctx:
     _ufw: str | None = None
     _docker_user: str | None = None
     _iface: str | None = None
+    _ext_ifaces: list | None = None
 
     @property
     def lan_cidr(self) -> str:
@@ -219,21 +286,39 @@ class Ctx:
             self._ufw = sh(["ufw", "status"]) or ""
         return [m.group(1) for m in re.finditer(rf"^{port}(?:/tcp)?\s+ALLOW(?: IN)?\s+(\S+)", self._ufw, re.M)]
 
-    def docker_user_drops(self, port: int) -> bool:
-        """True if DOCKER-USER has a DROP rule covering this port (needs root)."""
+    def external_ifaces(self) -> list[str]:
+        """Network interfaces that face a network: up, with an IPv4 address, not loopback or a container bridge."""
+        if self._ext_ifaces is None:
+            names = []
+            for line in (sh(["ip", "-br", "addr"]) or "").splitlines():
+                p = line.split()
+                if len(p) >= 3 and p[1] in ("UP", "UNKNOWN") and re.search(r"\d+\.\d+\.\d+\.\d+/", " ".join(p[2:])):
+                    n = p[0].split("@")[0]
+                    if n != "lo" and not re.match(r"(docker|br-|veth|virbr|cni|flannel|cali)", n):
+                        names.append(n)
+            self._ext_ifaces = names or [self.default_iface()]
+        return self._ext_ifaces
+
+    def docker_user_cover(self, host_port: int, container_port: int | None = None, proto: str = "tcp") -> set[str]:
+        """Interfaces on which DOCKER-USER drops this published port ("*" = every interface). Needs root.
+        container_port defaults to host_port: only right when Docker maps the port to itself."""
         if self._docker_user is None:
             self._docker_user = sh(["iptables", "-S", "DOCKER-USER"]) or ""
-        for line in self._docker_user.splitlines():
-            if "-j DROP" not in line:
-                continue
-            if (m := re.search(r"--dport (\d+)", line)) and int(m.group(1)) == port:
-                return True
-            if (m := re.search(r"--dports ([\d:,]+)", line)):
-                for part in m.group(1).split(","):
-                    lo, _, hi = part.partition(":")
-                    if int(lo) <= port <= int(hi or lo):
-                        return True
-        return False
+        cp = container_port or host_port
+        covered: set[str] = set()
+        for r in parse_drop_rules(self._docker_user):
+            if rule_covers(r, host_port, cp, proto):
+                covered.add("*" if r.iface is None else r.iface)
+        return covered
+
+    def docker_user_uncovered(self, host_port: int, container_port: int | None = None) -> list[str]:
+        """External interfaces on which the published port is NOT dropped (empty = fully protected)."""
+        cov = self.docker_user_cover(host_port, container_port)
+        return [] if "*" in cov else [i for i in self.external_ifaces() if i not in cov]
+
+    def docker_user_drops(self, port: int, container_port: int | None = None) -> bool:
+        """True only if DOCKER-USER drops the port on every external interface (needs root)."""
+        return not self.docker_user_uncovered(port, container_port)
 
     def env_of_pid(self, pid: int) -> dict:
         try:

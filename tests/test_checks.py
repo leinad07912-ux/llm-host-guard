@@ -27,6 +27,7 @@ def ctx_with(listeners):
     c = core.Ctx()
     c._listeners = listeners
     c._lan_ip = "192.168.1.10"
+    c._ext_ifaces = ["eth0"]  # tests must not depend on this machine's real interfaces
     return c
 
 
@@ -106,13 +107,24 @@ class Scoping(unittest.TestCase):
 
     def test_docker_user_drop_downgrades(self):
         c = ctx_with([])
-        c._docker_user = "-A DOCKER-USER -i wlp98s0 -p tcp -m multiport --dports 54321:54327 -j DROP\n-A DOCKER-USER -i wlp98s0 -p tcp --dport 11235 -j DROP\n"
-        self.assertTrue(c.docker_user_drops(54323) and c.docker_user_drops(11235))
+        c._ext_ifaces = ["wlp98s0"]  # one external interface
+        # conntrack matches the port the client dialled (54321), so it also covers kong -> container port 8000
+        c._docker_user = ("-A DOCKER-USER -i wlp98s0 -p tcp -m conntrack --ctorigdstport 54321:54327 --ctdir ORIGINAL -j DROP\n"
+                          "-A DOCKER-USER -i wlp98s0 -p tcp --dport 11235 -j DROP\n")
+        self.assertTrue(c.docker_user_drops(54323, 3000) and c.docker_user_drops(11235))
         self.assertFalse(c.docker_user_drops(8000))
         ps = "kong\t0.0.0.0:54321->8000/tcp\nweb\t0.0.0.0:8000->80/tcp\n"
         with mock.patch.object(docker, "sh", side_effect=lambda a, **k: ps if a[0] == "docker" else "x\n"):
             sev = {x.evidence.get("port"): x.severity for x in docker.run(c) if x.evidence}
         self.assertEqual((sev[54321], sev[8000]), ("LOW", "CRITICAL"))
+
+    def test_a_plain_dport_rule_on_the_published_port_does_not_protect_a_remapped_container(self):
+        """Regression (found on a real host 2026-10-01): Docker rewrites 54321 -> 8000 before DOCKER-USER runs."""
+        c = ctx_with([])
+        c._ext_ifaces = ["wlp98s0"]
+        c._docker_user = "-A DOCKER-USER -i wlp98s0 -p tcp -m multiport --dports 54321:54327 -j DROP\n"
+        self.assertFalse(c.docker_user_drops(54321, 8000))
+        self.assertTrue(c.docker_user_drops(54321, 54321))  # identical mapping: the plain rule does match
 
 
 class Models(unittest.TestCase):
