@@ -5,6 +5,7 @@ import sys
 import tempfile
 import time
 import unittest
+from datetime import date
 from pathlib import Path
 from unittest import mock
 
@@ -27,6 +28,7 @@ def ctx_with(listeners):
     c = core.Ctx()
     c._listeners = listeners
     c._lan_ip = "192.168.1.10"
+    c._ext_ifaces = ["eth0"]  # tests must not depend on this machine's real interfaces
     return c
 
 
@@ -106,13 +108,24 @@ class Scoping(unittest.TestCase):
 
     def test_docker_user_drop_downgrades(self):
         c = ctx_with([])
-        c._docker_user = "-A DOCKER-USER -i wlp98s0 -p tcp -m multiport --dports 54321:54327 -j DROP\n-A DOCKER-USER -i wlp98s0 -p tcp --dport 11235 -j DROP\n"
-        self.assertTrue(c.docker_user_drops(54323) and c.docker_user_drops(11235))
+        c._ext_ifaces = ["wlp98s0"]  # one external interface
+        # conntrack matches the port the client dialled (54321), so it also covers kong -> container port 8000
+        c._docker_user = ("-A DOCKER-USER -i wlp98s0 -p tcp -m conntrack --ctorigdstport 54321:54327 --ctdir ORIGINAL -j DROP\n"
+                          "-A DOCKER-USER -i wlp98s0 -p tcp --dport 11235 -j DROP\n")
+        self.assertTrue(c.docker_user_drops(54323, 3000) and c.docker_user_drops(11235))
         self.assertFalse(c.docker_user_drops(8000))
         ps = "kong\t0.0.0.0:54321->8000/tcp\nweb\t0.0.0.0:8000->80/tcp\n"
         with mock.patch.object(docker, "sh", side_effect=lambda a, **k: ps if a[0] == "docker" else "x\n"):
             sev = {x.evidence.get("port"): x.severity for x in docker.run(c) if x.evidence}
         self.assertEqual((sev[54321], sev[8000]), ("LOW", "CRITICAL"))
+
+    def test_a_plain_dport_rule_on_the_published_port_does_not_protect_a_remapped_container(self):
+        """Regression (found on a real host 2026-10-01): Docker rewrites 54321 -> 8000 before DOCKER-USER runs."""
+        c = ctx_with([])
+        c._ext_ifaces = ["wlp98s0"]
+        c._docker_user = "-A DOCKER-USER -i wlp98s0 -p tcp -m multiport --dports 54321:54327 -j DROP\n"
+        self.assertFalse(c.docker_user_drops(54321, 8000))
+        self.assertTrue(c.docker_user_drops(54321, 54321))  # identical mapping: the plain rule does match
 
 
 class Models(unittest.TestCase):
@@ -271,3 +284,39 @@ class Fleet(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class AgentVersions(unittest.TestCase):
+    def setUp(self):
+        self.c = ctx_with([])
+        self.c.cves = {"latest_known": {"claude-code": {"version": "2.1.293", "checked": "2026-10-08"}}}
+        self.today = date(2026, 10, 9)
+
+    def run_one(self, ver, today=None):
+        return versions.agent_findings(self.c, {"Claude Code": ("claude-code", ver)}, today or self.today)[0]
+
+    def test_current_is_ok(self):
+        self.assertEqual(self.run_one("2.1.290").severity, "OK")
+
+    def test_four_minors_behind_is_low(self):
+        self.c.cves["latest_known"]["claude-code"]["version"] = "2.5.0"
+        self.assertEqual(self.run_one("2.1.0").severity, "LOW")
+
+    def test_stale_data_is_info_never_ok(self):
+        self.assertEqual(self.run_one("2.1.290", date(2027, 3, 1)).severity, "INFO")
+
+    def test_advisory_uses_its_severity(self):
+        self.c.cves["claude-code"] = [{"id": "GHSA-x", "fixed_in": "2.1.300", "severity": "HIGH", "desc": "d"}]
+        f = self.run_one("2.1.290")
+        self.assertEqual((f.severity, f.evidence["cves"]), ("HIGH", ["GHSA-x"]))
+
+    def test_unreadable_version_is_info(self):
+        self.assertEqual(self.run_one(None).severity, "INFO")
+
+    def test_hanging_version_cmd_does_not_stall(self):
+        t = {"name": "Claude Code", "version_key": "claude-code", "version_cmd": ["sleep", "30"]}
+        self.c.signatures = {"agent_tools": [t]}
+        self.c._agents = [{"name": "Claude Code"}]
+        t0 = time.time()
+        self.assertEqual(versions.agent_versions(self.c), {"Claude Code": ("claude-code", None)})
+        self.assertLess(time.time() - t0, 5)

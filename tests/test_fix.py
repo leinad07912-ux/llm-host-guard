@@ -17,6 +17,7 @@ def ctx_with(listeners, ufw="", lan="192.168.1.10"):
     c._ufw = ufw
     c._docker_user = ""
     c._iface = "eth0"
+    c._ext_ifaces = ["eth0"]  # tests must not depend on this machine's real interfaces
     return c
 
 
@@ -102,13 +103,16 @@ class Recipes(unittest.TestCase):
              mock.patch("shutil.which", return_value=None):
             self.assertEqual(ports.run(c)[0].fix_cmds, [])
 
-    def test_docker_recipe_uses_default_iface(self):
+    def test_docker_recipe_matches_the_dialled_port_on_each_external_iface(self):
         c = ctx_with([])
         ps = "web\t0.0.0.0:8080->80/tcp\n"
         with mock.patch.object(docker, "sh", side_effect=lambda a, **k: ps if a[0] == "docker" else "x\n"):
             f = [x for x in docker.run(c) if x.evidence.get("port") == 8080][0]
-        self.assertEqual(f.fix_cmds, ["iptables -I DOCKER-USER -i eth0 -p tcp --dport 8080 -j DROP"])
-        self.assertEqual(f.undo_cmds, ["iptables -D DOCKER-USER -i eth0 -p tcp --dport 8080 -j DROP"])
+        # 8080 -> container port 80: the rule must match the port the client dialled (--ctorigdstport); a plain
+        # --dport 8080 would match nothing because Docker rewrites the destination to 80 first
+        rule = "DOCKER-USER -i eth0 -p tcp -m conntrack --ctorigdstport 8080 --ctdir ORIGINAL -j DROP"
+        self.assertEqual(f.fix_cmds, [f"iptables -I {rule}"])
+        self.assertEqual(f.undo_cmds, [f"iptables -D {rule}"])
 
     def test_sshd_recipe_requires_key(self):
         with mock.patch.object(config, "sh", return_value="passwordauthentication yes\n"), \

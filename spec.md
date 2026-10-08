@@ -42,7 +42,7 @@ python3 llm_host_guard.py [--json] [--html out.html] [--watch N] [--checks a,b,c
 
 - `ports` — enumerate TCP listeners (ss → lsof → netstat fallback), match `data/signatures.json` by port and process name, flag non-loopback binds; actively probe `/api/tags`, `/v1/models`, `/` on the host's LAN IP to prove reachability and no-auth.
 - `firewall` — ufw / firewalld / nftables / pf / Windows Firewall presence and default policy; whether LLM ports have rules wider than RFC1918.
-- `docker` — `docker ps` port mappings published on 0.0.0.0 for LLM-signature ports or any port; empty DOCKER-USER chain noted.
+- `docker` — `docker ps` port mappings published on 0.0.0.0 for LLM-signature ports or any port (single ports and ranges such as `6333-6334->6333-6334`); empty DOCKER-USER chain noted. A DROP rule is credited only when it covers the port on **every** external interface (`ip -br addr`: up, IPv4, not loopback or a container bridge) and actually matches: Docker rewrites the destination to the container's port before DOCKER-USER runs, so a `--dport` rule matches the container port while `--ctorigdstport` matches the port the client dialled. Rules with source/destination matches or negations are not credited, and parsing stops at the first ACCEPT/RETURN. IPv4 `iptables` only.
 - `exposure` — public IP on any interface; cloudflared/ngrok/tailscale-funnel/bore processes present; router UPnP = v1.1.
 - `models` — walk Ollama, HF cache, LM Studio, Jan, custom `--model-dir`. Pickle formats (`.pt .bin .pkl .ckpt .pth`) = HIGH; GGUF magic `GGUF` + version ≤ 3 sanity, safetensors 8-byte header length ≤ file size; world-writable files/dirs = MED.
 - `versions` — `ollama --version`, vllm, llama-server, LM Studio app bundle; compare to `data/cves.json` (semver ranges).
@@ -93,7 +93,7 @@ HTML report and future `--serve`/hosted dashboard consume this exact object.
 | LLM port open to LAN, ufw present | `ufw allow from <lan>/24 to any port N proto tcp comment llm-host-guard` (scopes; does not touch bind) | `ufw delete allow from <lan>/24 to any port N proto tcp` |
 | ufw allows LLM port from Anywhere | delete the Anywhere rule, add the scoped rule above | reverse |
 | `OLLAMA_HOST=0.0.0.0`, systemd-managed, not ufw-scoped | drop-in `/etc/systemd/system/ollama.service.d/llm-host-guard.conf` → `Environment=OLLAMA_HOST=127.0.0.1`, daemon-reload, restart | remove drop-in, daemon-reload, restart |
-| container publishes 0.0.0.0:N | `iptables -I DOCKER-USER -i <default-iface> -p tcp --dport N -j DROP` (live; persistence hint printed — distro-specific) | `iptables -D …` |
+| container publishes 0.0.0.0:N | one `iptables -I DOCKER-USER -i <iface> -p tcp -m conntrack --ctorigdstport N --ctdir ORIGINAL -j DROP` per uncovered external interface (live; persistence hint printed — distro-specific; verify from another device) | `iptables -D …` |
 | sshd PasswordAuthentication yes | drop-in `/etc/ssh/sshd_config.d/00-llm-host-guard.conf` → `PasswordAuthentication no` (00- sorts before cloud-init's 50-, first match wins), `sshd -t`, reload | remove drop-in, reload |
 
 ## Safety rules

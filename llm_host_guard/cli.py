@@ -36,7 +36,7 @@ def score(findings: list[Finding]) -> int:
 
 
 def report(ctx: Ctx, findings: list[Finding]) -> dict:
-    return {"tool": "llm-host-guard", "version": VERSION, "host": ctx.host, "os": ctx.os, "lan_ip": ctx.lan_ip,
+    return {"tool": "llm-host-guard", "schema": 2, "version": VERSION, "host": ctx.host, "os": ctx.os, "lan_ip": ctx.lan_ip,
             "form": form_factor(),
             "ts": dt.datetime.now(dt.timezone.utc).isoformat(timespec="seconds"),
             "score": score(findings), "findings": [f.to_dict() for f in findings]}
@@ -258,6 +258,8 @@ def main(argv: list[str] | None = None) -> int:
                     help="send each report to a llm-host-guard-fleet collector (env LLM_HOST_GUARD_FLEET_URL)")
     ap.add_argument("--enrol-key", default=os.getenv("LLM_HOST_GUARD_FLEET_KEY"),
                     help="fleet enrol key (env LLM_HOST_GUARD_FLEET_KEY preferred — keeps it out of ps)")
+    ap.add_argument("--idle-days", type=float, default=3.0, help="warn when a running agent has been unused this many days")
+    ap.add_argument("--idle-days-screen", type=float, default=1.0, help="same, for agents that can control the screen/mouse")
     ap.add_argument("--checks", default=",".join(checks.ALL), help=f"comma list of: {','.join(checks.ALL)}")
     ap.add_argument("--model-dir", action="append", default=[], help="extra model directory to scan")
     ap.add_argument("--internet", action="store_true",
@@ -273,6 +275,8 @@ def main(argv: list[str] | None = None) -> int:
         post_telegram({"host": Ctx().host, "score": "-"}, [{"severity": "OK", "title": "connected ✅ — you will get a message here when something new opens up", "fix": ""}])
         print("sent (if nothing arrived: check the two env vars and that you pressed Start on the bot)")
         return 0
+    from llm_host_guard.checks import agent_risk
+    agent_risk.IDLE_DAYS, agent_risk.IDLE_DAYS_SCREEN = a.idle_days, a.idle_days_screen
     known = {**checks.ALL, **checks.OPTIONAL}
     names = [n.strip() for n in a.checks.split(",") if n.strip() in known]
     if a.internet and "internet" not in names:
