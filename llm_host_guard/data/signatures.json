@@ -282,6 +282,11 @@
         "fs_write",
         "network",
         "web_fetch"
+      ],
+      "version_key": "claude-code",
+      "version_cmd": [
+        "claude",
+        "--version"
       ]
     },
     {
@@ -331,6 +336,11 @@
         "fs_write",
         "network",
         "web_fetch"
+      ],
+      "version_key": "codex",
+      "version_cmd": [
+        "codex",
+        "--version"
       ]
     },
     {
@@ -355,6 +365,11 @@
         "fs_write",
         "network",
         "web_fetch"
+      ],
+      "version_key": "gemini-cli",
+      "version_cmd": [
+        "gemini",
+        "--version"
       ]
     },
     {
@@ -401,6 +416,11 @@
         "fs_read",
         "fs_write",
         "network"
+      ],
+      "version_key": "aider",
+      "version_cmd": [
+        "aider",
+        "--version"
       ]
     },
     {
@@ -425,6 +445,11 @@
         "web_fetch",
         "screen",
         "keyboard_mouse"
+      ],
+      "version_key": "open-interpreter",
+      "version_cmd": [
+        "interpreter",
+        "--version"
       ]
     },
     {

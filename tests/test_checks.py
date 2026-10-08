@@ -5,6 +5,7 @@ import sys
 import tempfile
 import time
 import unittest
+from datetime import date
 from pathlib import Path
 from unittest import mock
 
@@ -283,3 +284,39 @@ class Fleet(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class AgentVersions(unittest.TestCase):
+    def setUp(self):
+        self.c = ctx_with([])
+        self.c.cves = {"latest_known": {"claude-code": {"version": "2.1.293", "checked": "2026-10-08"}}}
+        self.today = date(2026, 10, 9)
+
+    def run_one(self, ver, today=None):
+        return versions.agent_findings(self.c, {"Claude Code": ("claude-code", ver)}, today or self.today)[0]
+
+    def test_current_is_ok(self):
+        self.assertEqual(self.run_one("2.1.290").severity, "OK")
+
+    def test_four_minors_behind_is_low(self):
+        self.c.cves["latest_known"]["claude-code"]["version"] = "2.5.0"
+        self.assertEqual(self.run_one("2.1.0").severity, "LOW")
+
+    def test_stale_data_is_info_never_ok(self):
+        self.assertEqual(self.run_one("2.1.290", date(2027, 3, 1)).severity, "INFO")
+
+    def test_advisory_uses_its_severity(self):
+        self.c.cves["claude-code"] = [{"id": "GHSA-x", "fixed_in": "2.1.300", "severity": "HIGH", "desc": "d"}]
+        f = self.run_one("2.1.290")
+        self.assertEqual((f.severity, f.evidence["cves"]), ("HIGH", ["GHSA-x"]))
+
+    def test_unreadable_version_is_info(self):
+        self.assertEqual(self.run_one(None).severity, "INFO")
+
+    def test_hanging_version_cmd_does_not_stall(self):
+        t = {"name": "Claude Code", "version_key": "claude-code", "version_cmd": ["sleep", "30"]}
+        self.c.signatures = {"agent_tools": [t]}
+        self.c._agents = [{"name": "Claude Code"}]
+        t0 = time.time()
+        self.assertEqual(versions.agent_versions(self.c), {"Claude Code": ("claude-code", None)})
+        self.assertLess(time.time() - t0, 5)
