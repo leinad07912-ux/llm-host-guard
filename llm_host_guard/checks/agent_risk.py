@@ -108,7 +108,7 @@ def injection_exposure(ctx: Ctx, facts: dict) -> list[Finding]:
                                "Switch the approval prompts back on.", ev,
                                risk="Risk: a hidden instruction in a web page or document could make it act on your computer."))
         else:
-            out.append(Finding(NAME, "MED", f"{base}; approval prompts are on, keep them on",
+            out.append(Finding(NAME, "INFO", f"{base}; approval prompts are on, keep them on",
                                "Content from outside can carry instructions. The approval step is what stands between that and your files.",
                                "Keep approval prompts on and read each request before accepting.", ev))
     return out

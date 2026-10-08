@@ -203,12 +203,12 @@ class IdleAndInjection(Base):
         self.assertEqual(fs[0].severity, "HIGH")
         self.assertEqual(fs[0].evidence["prompts"], "off")
 
-    def test_injection_med_when_prompts_on(self):
+    def test_injection_info_when_prompts_on(self):
         self.write(".claude.json", {"mcpServers": {}})
         c = self.ctx()
         agents.inventory(c, {})
         fs = [f for f in agent_risk.injection_exposure(c, permissions.audit(c)[1]) if f.evidence["tool"] == "Claude Code"]
-        self.assertEqual(fs[0].severity, "MED")
+        self.assertEqual(fs[0].severity, "INFO")   # shown on the host page, costs no score
 
     def test_injection_none_without_both_halves(self):
         (self.home / ".aider.conf.yml").write_text("x")      # shell+fs_write but no untrusted-input capability
