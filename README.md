@@ -50,7 +50,9 @@ Ollama, LM Studio, vLLM, llama.cpp and friends ship with **no authentication**, 
 | `models` | Pickle weights (`.pt .bin .ckpt`) = RCE on load; malformed GGUF / safetensors headers (parser-CVE bait); world-writable model dirs |
 | `versions` | Ollama / vLLM / llama.cpp / Open WebUI against a bundled CVE table |
 | `config` | `OLLAMA_ORIGINS=*` (any website can drive your LLM from your browser), `OLLAMA_HOST=0.0.0.0`, vLLM / llama-server without `--api-key`, Open WebUI signup, sshd password auth |
-| `agents` | Claude Code / Cursor / Codex / MCP configs present → points you to agent-side tooling |
+| `agents` | **Inventory** of AI agents installed or running here (Claude Code, Cursor, Codex, Gemini CLI, Windsurf, Aider, Open Interpreter, OpenClaw…), what each can do, and its MCP servers. Reads config paths only. |
+| `permissions` | **Permission audit** of agent/MCP configs: file tools rooted at your home or a whole drive, approval prompts switched off, wildcard shell rules, secrets saved in plain text (names only, never values), unpinned `npx`/`uvx` tools, remote `http://` servers. |
+| `agent_risk` | **Idle agents** (running but unused for `--idle-days`, default 3; 1 day for agents that control the screen/mouse; open model servers nobody uses) and **prompt-injection exposure**: an agent that reads web/email content *and* can run commands or change files. This shows where an injection would hurt most. It does not detect injections. |
 | `runtime` | **Behaviour of the running server**: an LLM process that spawned a shell/downloader/unexpected child (the shape of a poisoned-model exploit) → CRITICAL; server or its children connected to a public IP (fine during a pull, otherwise not) → HIGH. `/proc` on Linux, `ps`+`lsof` on macOS, no root. `--checks runtime --watch 0.1` for a 6-second loop. |
 | `internet` (opt-in `--internet`) | What the outside already sees: your public IP's open ports + CVEs via Shodan InternetDB (free, keyless), and router UPnP port-forwards to LLM ports. The only check that makes outbound calls. |
 

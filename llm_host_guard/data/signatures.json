@@ -257,40 +257,237 @@
   "agent_tools": [
     {
       "name": "Claude Code",
+      "kind": "coding_agent",
       "paths": [
         "~/.claude",
         "~/.claude.json"
+      ],
+      "procs": [
+        "claude"
+      ],
+      "mcp_config_paths": [
+        "~/.claude.json"
+      ],
+      "settings_paths": [
+        "~/.claude/settings.json",
+        "~/.claude/settings.local.json"
+      ],
+      "activity_paths": [
+        "~/.claude/projects",
+        "~/.claude/history.jsonl"
+      ],
+      "capabilities": [
+        "shell",
+        "fs_read",
+        "fs_write",
+        "network",
+        "web_fetch"
       ]
     },
     {
       "name": "Cursor",
+      "kind": "coding_agent",
       "paths": [
         "~/.cursor"
+      ],
+      "procs": [
+        "cursor"
+      ],
+      "mcp_config_paths": [
+        "~/.cursor/mcp.json"
+      ],
+      "settings_paths": [],
+      "activity_paths": [
+        "~/.cursor"
+      ],
+      "capabilities": [
+        "shell",
+        "fs_read",
+        "fs_write",
+        "network",
+        "web_fetch"
       ]
     },
     {
       "name": "Codex CLI",
+      "kind": "coding_agent",
       "paths": [
         "~/.codex"
+      ],
+      "procs": [
+        "codex"
+      ],
+      "mcp_config_paths": [
+        "~/.codex/config.toml"
+      ],
+      "settings_paths": [],
+      "activity_paths": [
+        "~/.codex/sessions",
+        "~/.codex/history.jsonl"
+      ],
+      "capabilities": [
+        "shell",
+        "fs_read",
+        "fs_write",
+        "network",
+        "web_fetch"
       ]
     },
     {
-      "name": "MCP config",
+      "name": "Gemini CLI",
+      "kind": "coding_agent",
       "paths": [
-        "~/.mcp.json",
-        "~/.config/mcp"
+        "~/.gemini"
+      ],
+      "procs": [
+        "gemini"
+      ],
+      "mcp_config_paths": [
+        "~/.gemini/settings.json"
+      ],
+      "settings_paths": [],
+      "activity_paths": [
+        "~/.gemini/tmp"
+      ],
+      "capabilities": [
+        "shell",
+        "fs_read",
+        "fs_write",
+        "network",
+        "web_fetch"
+      ]
+    },
+    {
+      "name": "Windsurf",
+      "kind": "coding_agent",
+      "paths": [
+        "~/.codeium/windsurf"
+      ],
+      "procs": [
+        "windsurf"
+      ],
+      "mcp_config_paths": [
+        "~/.codeium/windsurf/mcp_config.json"
+      ],
+      "settings_paths": [],
+      "activity_paths": [
+        "~/.codeium/windsurf"
+      ],
+      "capabilities": [
+        "shell",
+        "fs_read",
+        "fs_write",
+        "network",
+        "web_fetch"
+      ]
+    },
+    {
+      "name": "Aider",
+      "kind": "coding_agent",
+      "paths": [
+        "~/.aider.conf.yml",
+        "~/.aider.chat.history.md"
+      ],
+      "procs": [
+        "aider"
+      ],
+      "mcp_config_paths": [],
+      "settings_paths": [],
+      "activity_paths": [
+        "~/.aider.chat.history.md"
+      ],
+      "capabilities": [
+        "shell",
+        "fs_read",
+        "fs_write",
+        "network"
+      ]
+    },
+    {
+      "name": "Open Interpreter",
+      "kind": "computer_use",
+      "paths": [
+        "~/.config/open-interpreter"
+      ],
+      "procs": [
+        "interpreter"
+      ],
+      "mcp_config_paths": [],
+      "settings_paths": [],
+      "activity_paths": [
+        "~/.config/open-interpreter"
+      ],
+      "capabilities": [
+        "shell",
+        "fs_read",
+        "fs_write",
+        "network",
+        "web_fetch",
+        "screen",
+        "keyboard_mouse"
       ]
     },
     {
       "name": "OpenClaw",
+      "kind": "desktop_assistant",
       "paths": [
         "~/.openclaw"
+      ],
+      "procs": [
+        "openclaw"
+      ],
+      "mcp_config_paths": [],
+      "settings_paths": [],
+      "activity_paths": [
+        "~/.openclaw"
+      ],
+      "capabilities": [
+        "shell",
+        "fs_read",
+        "fs_write",
+        "network",
+        "browser"
       ]
     },
     {
       "name": "Hermes",
+      "kind": "coding_agent",
       "paths": [
         "~/.hermes"
+      ],
+      "procs": [
+        "hermes"
+      ],
+      "mcp_config_paths": [],
+      "settings_paths": [],
+      "activity_paths": [
+        "~/.hermes"
+      ],
+      "capabilities": [
+        "shell",
+        "fs_read",
+        "fs_write",
+        "network",
+        "web_fetch"
+      ]
+    },
+    {
+      "name": "Claude desktop",
+      "kind": "desktop_assistant",
+      "paths": [
+        "~/.config/Claude",
+        "~/Library/Application Support/Claude"
+      ],
+      "procs": [],
+      "mcp_config_paths": [
+        "~/.config/Claude/claude_desktop_config.json",
+        "~/Library/Application Support/Claude/claude_desktop_config.json"
+      ],
+      "settings_paths": [],
+      "activity_paths": [],
+      "capabilities": [
+        "fs_read",
+        "network"
       ]
     }
   ],
@@ -303,5 +500,9 @@
     "zrok",
     "pinggy",
     "tailscale funnel"
+  ],
+  "mcp_config_paths": [
+    "~/.mcp.json",
+    "~/.config/mcp"
   ]
 }
