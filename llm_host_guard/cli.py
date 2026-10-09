@@ -141,7 +141,7 @@ def post_telegram(rep: dict, new: list[dict], buttons: bool = False) -> None:
     if buttons:
         from llm_host_guard import actions
         icon = {"CRITICAL": "🔴", "HIGH": "🟠", "MED": "🟡"}
-        word = {"CRITICAL": "Urgent", "HIGH": "Fix this week", "MED": "Tighten when convenient"}
+        word = {"CRITICAL": "Urgent", "HIGH": "Fix this week", "MED": "Could be safer"}
         rest = []
         for f in new:
             aid = actions.register(f)
@@ -150,25 +150,27 @@ def post_telegram(rep: dict, new: list[dict], buttons: bool = False) -> None:
                 continue
             risk = f.get("risk") or RISK_LINE.get(f["severity"], "")
             note = f.get("fix_note", "")
-            text = (f"{icon.get(f['severity'], '•')} {word.get(f['severity'], f['severity'])}: {f['title']}\n"
+            text = (f"{icon.get(f['severity'], '•')} {word.get(f['severity'], f['severity'])}: {f.get('say') or f['title']}\n"
                     + (f"   {risk}\n" if risk else "")
+                    + (f"   What to do: {f['todo']}\n" if f.get("todo") else "")
                     + (f"   ⚠️ {note}\n" if note and f.get("require_confirm") else "")
-                    + f"   Close it runs the fix ({len(f['fix_cmds'])} command{'s' if len(f['fix_cmds']) > 1 else ''}); Undo stays available. Close for 1h reopens on its own.")
+                    + f"   Tap Close it and I fix it for you. You can undo it. Close for 1h puts it back by itself.")
             actions.tg("sendMessage", {"chat_id": chat, "text": text[:4000], "reply_markup": actions.keyboard(aid),
                                        "disable_web_page_preview": True})
         new = rest
         if not new:
             return
     icon = {"CRITICAL": "🔴", "HIGH": "🟠", "MED": "🟡"}
-    word = {"CRITICAL": "Urgent", "HIGH": "Fix this week", "MED": "Tighten when convenient", "LOW": "FYI", "INFO": "FYI", "OK": "OK"}
+    word = {"CRITICAL": "Urgent", "HIGH": "Fix this week", "MED": "Could be safer", "LOW": "FYI", "INFO": "FYI", "OK": "OK"}
     lines = [f"🛡 {rep['host']}: {len(new)} new thing(s) found — score {rep['score']}/10", ""]
     for f in new[:6]:
-        lines.append(f"{icon.get(f['severity'], '•')} {word.get(f['severity'], f['severity'])}: {f['title']}")
+        lines.append(f"{icon.get(f['severity'], '•')} {word.get(f['severity'], f['severity'])}: {f.get('say') or f['title']}")
         risk = f.get("risk") or RISK_LINE.get(f["severity"])
         if risk:
             lines.append(f"   {risk}")
-        if f["fix"]:
-            lines.append(f"   What to do: {f['fix'][:180]}")
+        todo = f.get("todo") or f["fix"][:180]
+        if todo:
+            lines.append(f"   What to do: {todo}")
         lines.append("")
     if len(new) > 6:
         lines.append(f"…and {len(new) - 6} more in the report.")

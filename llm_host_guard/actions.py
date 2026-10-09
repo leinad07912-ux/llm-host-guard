@@ -70,7 +70,7 @@ def register(finding: dict) -> str | None:
     """Store a finding's recipe; return a short id for callback_data, or None if it has no recipe."""
     if not finding.get("fix_cmds"):
         return None
-    return _put({"title": finding["title"], "fix": finding["fix_cmds"], "undo": finding.get("undo_cmds", []),
+    return _put({"title": finding.get("say") or finding["title"], "fix": finding["fix_cmds"], "undo": finding.get("undo_cmds", []),
                  "note": finding.get("fix_note", ""), "applied": False, "keys": [finding_key(finding)]})
 
 
@@ -88,7 +88,7 @@ def keyboard(aid: str | None, applied: bool = False, summary: bool = False) -> d
     if summary:
         return {"inline_keyboard": [[snooze, {"text": "✓ Leave it", "callback_data": f"lhg:ok:{aid}"}]]}
     if applied:
-        return {"inline_keyboard": [[{"text": "↩ Undo (reopen)", "callback_data": f"lhg:undo:{aid}"}]]}
+        return {"inline_keyboard": [[{"text": "↩ Undo", "callback_data": f"lhg:undo:{aid}"}]]}
     return {"inline_keyboard": [[{"text": "🔒 Close it", "callback_data": f"lhg:fix:{aid}"},
                                  {"text": "🔒 Close for 1h", "callback_data": f"lhg:tmp:{aid}"}],
                                 [snooze, {"text": "✓ Leave it", "callback_data": f"lhg:ok:{aid}"}]]}
@@ -166,7 +166,7 @@ def expire_temp(runner=None, now: float | None = None) -> list[str]:
             ok, msg = runner(a["undo"]) if a["undo"] else (False, "no undo for this one")
             a["applied"] = not ok
             a.pop("reopen_at", None)
-            out.append(f"⏰ hour is up — reopened: {a['title']}" if ok else f"❌ could not reopen {a['title']}: {msg}")
+            out.append(f"⏰ The hour is up. I put it back: {a['title']}" if ok else f"❌ I could not put it back ({a['title']}): {msg}")
             log_action("reopened after 1h", a["title"], ok)
     if out:
         _save(d)
@@ -188,7 +188,7 @@ def handle_callback(cq: dict, runner=run_cmds) -> str:
     """Process one callback_query. Returns the text to show the user."""
     _, chat = _creds()
     if str(cq.get("from", {}).get("id")) != str(chat):
-        return "not authorised"
+        return "Sorry, this button is not for you."
     data = cq.get("data", "")
     if not data.startswith("lhg:"):
         return ""
@@ -196,18 +196,18 @@ def handle_callback(cq: dict, runner=run_cmds) -> str:
     d = _load()
     a = d.get(aid)
     if not a:
-        return "this button has expired"
+        return "This button is too old. Wait for the next alert."
     if kind == "ok":
         log_action("left as is", a["title"])
-        return f"left as is: {a['title']}"
+        return f"OK, I left it alone: {a['title']}"
     if kind == "snz":
         snooze(a.get("keys", []))
         log_action("snoozed 24h", a["title"])
-        return f"⏰ will remind you tomorrow: {a['title']}"
+        return f"⏰ I will remind you tomorrow: {a['title']}"
     if not a.get("fix"):
-        return "nothing to run for this one"
+        return "There is nothing I can fix automatically here."
     if os.geteuid() != 0:
-        return "the watch service isn't running as root, so it can't apply fixes — run it with sudo"
+        return "I can't fix this yet, because I was not started with admin rights. Ask your IT person to restart me as admin."
     if kind in ("fix", "tmp"):
         ok, msg = runner(a["fix"])
         a["applied"] = ok
@@ -217,14 +217,14 @@ def handle_callback(cq: dict, runner=run_cmds) -> str:
         log_action("closed for 1h" if kind == "tmp" else "closed", a["title"], ok, wake=ok)
         if not ok:
             return f"❌ {msg}"
-        when = " — reopens in 1h, while the watch service is running" if kind == "tmp" else ""
-        return f"✅ closed: {a['title']}{when}" + (f"\n{a['note']}" if a["note"] else "")
+        when = " (I will put it back in 1 hour)" if kind == "tmp" else ""
+        return f"✅ Fixed: {a['title']}{when}" + (f"\n{a['note']}" if a["note"] else "")
     if kind == "undo":
         ok, msg = runner(a["undo"]) if a["undo"] else (False, "no undo for this one")
         a["applied"] = not ok
         _save(d)
         log_action("reopened (undo)", a["title"], ok, wake=ok)
-        return f"↩ undone: {a['title']}" if ok else f"❌ {msg}"
+        return f"↩ Put back the way it was: {a['title']}" if ok else f"❌ {msg}"
     return ""
 
 

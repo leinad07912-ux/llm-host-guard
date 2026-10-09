@@ -12,15 +12,15 @@ import subprocess
 from dataclasses import dataclass, field, asdict
 from pathlib import Path
 
-VERSION = "0.5.0"
+VERSION = "0.5.1"
 SEVERITIES = ["CRITICAL", "HIGH", "MED", "LOW", "INFO", "OK"]
 # One-line "so what" per severity, used in Telegram/fleet messages.
 RISK_LINE = {
     "CRITICAL": "Risk: anyone on your network or the internet can reach this right now.",
-    "HIGH": "Risk: a real hole — someone on your WiFi, or a file you open, could use it.",
-    "MED": "Risk: on purpose but wider than needed; tighten when you can.",
-    "LOW": "Risk: low — something else already blocks it.",
-    "INFO": "Risk: none — just so you know.",
+    "HIGH": "Risk: a real weak spot. Someone on your WiFi, or a file you open, could use it.",
+    "MED": "Risk: open on purpose, but wider than it needs to be. Tighten it when you can.",
+    "LOW": "Risk: low. Something else already blocks it.",
+    "INFO": "Risk: none. Just so you know.",
     "OK": "",
 }
 SEVERITY_HELP = {
@@ -46,13 +46,16 @@ class Finding:
     undo_cmds: list = field(default_factory=list)
     fix_note: str = ""                              # why a recipe is absent / caveat shown before applying
     risk: str = ""                                  # finding-specific plain-English risk line (overrides RISK_LINE)
+    say: str = ""                                   # plain-English headline, filled by plain.apply on to_dict
+    todo: str = ""                                  # plain-English next step, same
     require_confirm: bool = False                   # fix can cut off access; prompt even under --yes
 
     def key(self) -> str:
         return f"{self.check}:{self.severity}:{self.title}"
 
     def to_dict(self) -> dict:
-        return asdict(self)
+        from llm_host_guard import plain
+        return plain.apply(asdict(self))
 
 
 @dataclass

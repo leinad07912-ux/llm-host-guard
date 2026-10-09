@@ -189,12 +189,12 @@ class Actions(unittest.TestCase):
             self.assertIsNone(self.actions.register({"title": "no recipe"}))
             kb = self.actions.keyboard(aid)
             self.assertEqual([b["text"] for b in kb["inline_keyboard"][0]], ["🔒 Close it", "🔒 Close for 1h"])
-            self.assertIn("closed", self.actions.handle_callback(self.cq(f"lhg:fix:{aid}"), runner))
+            self.assertIn("Fixed", self.actions.handle_callback(self.cq(f"lhg:fix:{aid}"), runner))
             self.assertEqual(ran, ["ufw allow x"])
-            self.assertIn("undone", self.actions.handle_callback(self.cq(f"lhg:undo:{aid}"), runner))
+            self.assertIn("Put back", self.actions.handle_callback(self.cq(f"lhg:undo:{aid}"), runner))
             self.assertEqual(ran[-1], "ufw delete allow x")
-            self.assertEqual(self.actions.handle_callback(self.cq(f"lhg:fix:{aid}", uid="999"), runner), "not authorised")
-            self.assertIn("expired", self.actions.handle_callback(self.cq("lhg:fix:deadbeef"), runner))
+            self.assertEqual(self.actions.handle_callback(self.cq(f"lhg:fix:{aid}", uid="999"), runner), "Sorry, this button is not for you.")
+            self.assertIn("too old", self.actions.handle_callback(self.cq("lhg:fix:deadbeef"), runner))
 
     def test_snooze_and_temp_close(self):
         ran = []
@@ -211,11 +211,11 @@ class Actions(unittest.TestCase):
             self.assertEqual(self.actions.snoozed_due(now=time.time() + 25 * 3600), set())
             # temp close: fix runs now, undo runs once the hour is up
             aid = self.actions.register(f)
-            self.assertIn("reopens in 1h", self.actions.handle_callback(self.cq(f"lhg:tmp:{aid}", uid="1"), runner))
+            self.assertIn("1 hour", self.actions.handle_callback(self.cq(f"lhg:tmp:{aid}", uid="1"), runner))
             self.assertEqual(ran, ["ufw allow x"])
             self.assertEqual(self.actions.expire_temp(runner), [])
             msgs = self.actions.expire_temp(runner, now=time.time() + 3601)
-            self.assertEqual(len(msgs), 1); self.assertIn("reopened", msgs[0])
+            self.assertEqual(len(msgs), 1); self.assertIn("put it back", msgs[0])
             self.assertEqual(ran[-1], "ufw delete allow x")
             self.assertEqual(self.actions.expire_temp(runner, now=time.time() + 7200), [])  # not twice
             self.assertFalse(self.actions._load()[aid]["applied"])
@@ -239,14 +239,14 @@ class Actions(unittest.TestCase):
             s = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM); s.connect(path)
             s.sendall((json.dumps({"id": "1", "from": {"id": "7"}, "data": f"lhg:fix:{aid}"}) + "\n").encode())
             reply = json.loads(s.makefile("rb").readline()); s.close(); stop["v"] = True
-        self.assertIn("closed", reply["text"]); self.assertEqual(ran, ["echo hi"])
-        self.assertEqual(reply["keyboard"]["inline_keyboard"][0][0]["text"], "↩ Undo (reopen)")
+        self.assertIn("Fixed", reply["text"]); self.assertEqual(ran, ["echo hi"])
+        self.assertEqual(reply["keyboard"]["inline_keyboard"][0][0]["text"], "↩ Undo")
 
     def test_needs_root(self):
         with mock.patch.dict("os.environ", {"LLM_HOST_GUARD_TELEGRAM_BOT_TOKEN": "t", "LLM_HOST_GUARD_TELEGRAM_CHAT_ID": "1"}), \
              mock.patch("os.geteuid", return_value=1000):
             aid = self.actions.register({"title": "x", "fix_cmds": ["true"]})
-            self.assertIn("root", self.actions.handle_callback(self.cq(f"lhg:fix:{aid}", uid="1"), lambda c: (True, "")))
+            self.assertIn("admin rights", self.actions.handle_callback(self.cq(f"lhg:fix:{aid}", uid="1"), lambda c: (True, "")))
 
 
 class Fleet(unittest.TestCase):

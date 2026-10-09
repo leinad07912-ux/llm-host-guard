@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.5.1 — 2026-10-09
+
+Plain English everywhere a person reads or reacts.
+
+- Every finding now carries `say` (what is wrong), `todo` (what to do) and `risk` (why it matters), written so a 12-year-old can follow. Telegram alerts, button replies, the fleet table and host pages show these. The technical title, detail and fix stay in the JSON and under "Technical details".
+- Telegram button replies reworded ("Fixed", "Put back the way it was", "I will remind you tomorrow").
+- `tests/test_plain.py` fails the build if jargon (port, firewall, CVE, MCP, ...) appears in any plain-English line.
+
 ## 0.5.0 — 2026-10-08
 
 From "is this box open?" to "what are the AI agents on this box allowed to do?"
