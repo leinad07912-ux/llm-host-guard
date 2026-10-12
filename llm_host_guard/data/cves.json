@@ -27,11 +27,11 @@
   "lm-studio": [],
   "latest_known": {
     "_note": "Newest release seen on npm/PyPI. Refreshed weekly by tools/refresh_versions.py; 'checked' is when we last looked.",
-    "claude-code": {"version": "2.1.293", "checked": "2026-10-08"},
-    "codex": {"version": "0.161.0", "checked": "2026-10-08"},
-    "gemini-cli": {"version": "0.63.0", "checked": "2026-10-08"},
-    "aider": {"version": "0.86.2", "checked": "2026-10-08"},
-    "open-interpreter": {"version": "0.4.3", "checked": "2026-10-08"}
+    "claude-code": {"version": "2.1.296", "checked": "2026-10-12"},
+    "codex": {"version": "0.162.1", "checked": "2026-10-12"},
+    "gemini-cli": {"version": "0.63.0", "checked": "2026-10-12"},
+    "aider": {"version": "0.86.2", "checked": "2026-10-12"},
+    "open-interpreter": {"version": "0.4.3", "checked": "2026-10-12"}
   },
   "claude-code": [
     {"id": "CVE-2025-52882", "fixed_in": "1.0.24", "severity": "HIGH", "desc": "Claude Code Improper Authorization via websocket connections from arbitrary origins"},
