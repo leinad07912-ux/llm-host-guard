@@ -74,10 +74,15 @@ def idle_model_servers(ctx: Ctx, now: float, state_path: Path, clients=clients_c
             continue
         days = (now - max(s["first"], s["last_client"])) / 86400
         if days > idle_days:
+            # ponytail: stop recipe only for Ollama under systemd; other servers have no known unit name
+            stop = sig["name"] == "Ollama" and bool(sh(["systemctl", "cat", "ollama"]))
             out.append(Finding(NAME, "HIGH", f"{sig['name']} is open to the network and nobody has used it for {days:.0f} day(s)",
                                "It answers anyone who can reach this machine, yet no one is actually using it.",
                                f"Stop {sig['name']} or bind it to this machine only.",
-                               {"rule": "idle_agent", "tool": sig["name"], "port": l.port, "idle_days": round(days, 1)}))
+                               {"rule": "idle_agent", "tool": sig["name"], "port": l.port, "idle_days": round(days, 1)},
+                               fix_cmds=["systemctl stop ollama"] if stop else [],
+                               undo_cmds=["systemctl start ollama"] if stop else [],
+                               fix_note="stops the Ollama service; local agents using it will fail until restarted" if stop else ""))
     state = {k: v for k, v in state.items() if k in live}
     try:
         state_path.parent.mkdir(parents=True, exist_ok=True)
