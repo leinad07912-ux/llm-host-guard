@@ -194,6 +194,18 @@ class IdleAndInjection(Base):
         st.write_text(json.dumps({"11434": {"first": self.now - 5 * DAY, "last_client": 0}}))
         self.assertEqual(agent_risk.idle_model_servers(c, self.now, st, clients=lambda port: 2), [])
 
+    def test_idle_model_server_pinned_by_ufw_is_not_flagged(self):
+        l = core.Listener("tcp", "0.0.0.0", 11434, "ollama", 100)
+        c = self.ctx(listeners=[l])
+        st = self.home / "clients.json"
+        old = {"11434": {"first": self.now - 5 * DAY, "last_client": 0}}
+        c._ufw = "11434/tcp                  ALLOW IN    192.168.50.47"
+        st.write_text(json.dumps(old))
+        self.assertEqual(agent_risk.idle_model_servers(c, self.now, st, clients=lambda port: 0), [])
+        c._ufw = "11434/tcp                  ALLOW IN    192.168.50.0/24"   # whole subnet is not "named clients"
+        st.write_text(json.dumps(old))
+        self.assertEqual(len(agent_risk.idle_model_servers(c, self.now, st, clients=lambda port: 0)), 1)
+
     def test_injection_high_when_prompts_off(self):
         self.write(".claude.json", {"mcpServers": {"browser": {"command": "node", "args": ["playwright-mcp"]}}})
         self.write(".claude/settings.json", {"permissions": {"defaultMode": "bypassPermissions"}})

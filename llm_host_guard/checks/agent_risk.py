@@ -11,6 +11,7 @@ from pathlib import Path
 from llm_host_guard.core import Ctx, Finding, sh
 from llm_host_guard.checks import agents as ag
 from llm_host_guard.checks import permissions as perm
+from llm_host_guard.checks import ports
 
 NAME = "agent_risk"
 IDLE_DAYS = 3.0
@@ -66,6 +67,8 @@ def idle_model_servers(ctx: Ctx, now: float, state_path: Path, clients=clients_c
         if not sig or l.loopback or not l.wildcard:
             continue
         live.add(str(l.port))
+        if ports.pinned(ctx, l.port):   # firewall already limits it to named clients: idle is not an exposure
+            continue
         s = state.setdefault(str(l.port), {"first": now, "last_client": 0})
         n = clients(l.port)
         if n:

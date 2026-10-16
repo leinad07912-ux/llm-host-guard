@@ -38,6 +38,12 @@ def _single_host(src: str) -> bool:
     return not plen or plen in ("32", "128")
 
 
+def pinned(ctx: Ctx, port: int) -> bool:
+    """ufw allows this port only from specific single hosts (default deny covers everyone else)."""
+    srcs = [x for x in ctx.ufw_sources(port) if x != "Anywhere"]
+    return bool(srcs) and all(_single_host(x) for x in srcs)
+
+
 def run(ctx: Ctx) -> list[Finding]:
     out = []
     seen = set()
