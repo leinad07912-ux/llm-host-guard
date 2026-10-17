@@ -54,7 +54,7 @@ def idle_agents(ctx: Ctx, now: float, uptime=ag.uptime_s, idle_days: float | Non
 
 
 def idle_model_servers(ctx: Ctx, now: float, state_path: Path, clients=clients_connected,
-                       idle_days: float | None = None) -> list[Finding]:
+                       idle_days: float | None = None, probe=ports.probe) -> list[Finding]:
     """Model server open to the network with no client for idle_days. Needs watch history: first run only records."""
     idle_days = IDLE_DAYS if idle_days is None else idle_days
     try:
@@ -65,6 +65,10 @@ def idle_model_servers(ctx: Ctx, now: float, state_path: Path, clients=clients_c
     for l in ctx.listeners:
         sig = ctx.sig_for(l)
         if not sig or l.loopback or not l.wildcard:
+            continue
+        # Owner process unknown (unprivileged scan): the signature came from the port number alone, e.g. nginx on 8080 is
+        # not llama.cpp. Only an answering API confirms it, same rule as the ports check.
+        if not l.proc and not probe(ctx.lan_ip, l.port, sig.get("probe", [])):
             continue
         live.add(str(l.port))
         if ports.pinned(ctx, l.port):   # firewall already limits it to named clients: idle is not an exposure

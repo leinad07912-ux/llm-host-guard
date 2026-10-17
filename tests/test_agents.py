@@ -206,6 +206,18 @@ class IdleAndInjection(Base):
         st.write_text(json.dumps(old))
         self.assertEqual(len(agent_risk.idle_model_servers(c, self.now, st, clients=lambda port: 0)), 1)
 
+    def test_idle_server_guessed_from_port_alone_needs_a_probe_hit(self):
+        # nginx on 8080 with the owning process hidden: the port matches llama.cpp, but no model API answers
+        l = core.Listener("tcp", "0.0.0.0", 8080, "", 0)
+        c = self.ctx(listeners=[l])
+        st = self.home / "clients.json"
+        old = {"8080": {"first": self.now - 9 * DAY, "last_client": 0}}
+        st.write_text(json.dumps(old))
+        self.assertEqual(agent_risk.idle_model_servers(c, self.now, st, clients=lambda port: 0, probe=lambda *a, **k: {}), [])
+        st.write_text(json.dumps(old))
+        hit = agent_risk.idle_model_servers(c, self.now, st, clients=lambda port: 0, probe=lambda *a, **k: {"/v1/models": {"status": 200}})
+        self.assertEqual(len(hit), 1)
+
     def test_injection_high_when_prompts_off(self):
         self.write(".claude.json", {"mcpServers": {"browser": {"command": "node", "args": ["playwright-mcp"]}}})
         self.write(".claude/settings.json", {"permissions": {"defaultMode": "bypassPermissions"}})
