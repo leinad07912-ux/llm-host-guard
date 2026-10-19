@@ -27,11 +27,11 @@
   "lm-studio": [],
   "latest_known": {
     "_note": "Newest release seen on npm/PyPI. Refreshed weekly by tools/refresh_versions.py; 'checked' is when we last looked.",
-    "claude-code": {"version": "2.1.293", "checked": "2026-10-08"},
-    "codex": {"version": "0.161.0", "checked": "2026-10-08"},
-    "gemini-cli": {"version": "0.63.0", "checked": "2026-10-08"},
-    "aider": {"version": "0.86.2", "checked": "2026-10-08"},
-    "open-interpreter": {"version": "0.4.3", "checked": "2026-10-08"}
+    "claude-code": {"version": "2.1.303", "checked": "2026-10-19"},
+    "codex": {"version": "0.163.0", "checked": "2026-10-19"},
+    "gemini-cli": {"version": "0.64.0", "checked": "2026-10-19"},
+    "aider": {"version": "0.86.2", "checked": "2026-10-19"},
+    "open-interpreter": {"version": "0.4.3", "checked": "2026-10-19"}
   },
   "claude-code": [
     {"id": "CVE-2025-52882", "fixed_in": "1.0.24", "severity": "HIGH", "desc": "Claude Code Improper Authorization via websocket connections from arbitrary origins"},
@@ -61,6 +61,7 @@
     {"id": "CVE-2026-46406", "fixed_in": "2.1.128", "severity": "MED", "desc": "@anthropic-ai/claude-code has an Insecure Temporary File in /copy Command that Enables Response Disclosure and Symlink-Based File Write"},
     {"id": "CVE-2026-54316", "fixed_in": "2.1.163", "severity": "MED", "desc": "Claude Code: Out-of-Band Data Exfiltration via Pre-Approved HuggingFace Domain in WebFetch"},
     {"id": "CVE-2026-55607", "fixed_in": "2.1.163", "severity": "HIGH", "desc": "Claude Code: Sandbox Escape via Git Worktree Path Confusion Allows Unsandboxed Code Execution"},
+    {"id": "CVE-2026-86063", "fixed_in": "2.1.179", "severity": "HIGH", "desc": "Claude Code: Plugin Hash Pin Bypass Allows Bypass of Hash Pinning"},
     {"id": "GHSA-ph6w-f82w-28w6", "fixed_in": "1.0.87", "severity": "HIGH", "desc": "Claude Code Vulnerable to Arbitrary Code Execution Due to Insufficient Startup Warning"}
   ],
   "codex": [
